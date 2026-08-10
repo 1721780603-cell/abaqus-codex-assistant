@@ -2,7 +2,7 @@
 
 一个面向 Abaqus 初学者的开源项目：先检查本机环境，再用清晰、可追溯的步骤完成建模、求解、ODB 结果读取和中文报告生成。
 
-当前已经实现二维矩形板和中心圆孔板拉伸的完整闭环，并在 Abaqus 2021 上完成真实验证。
+当前已经实现四个由浅入深的二维模型：矩形板拉伸、中心圆孔板拉伸、悬臂梁均布载荷弯曲和方板双向拉伸，并在 Abaqus 2021 上完成真实验证。
 
 > 本项目是非官方社区项目，与 Dassault Systèmes 不存在隶属、授权或赞助关系。
 
@@ -15,6 +15,8 @@
 - 选择入门、论文复现、科研、生产或教学场景；
 - 生成二维平面应力矩形板拉伸模型；
 - 生成带孔边局部网格细化的二维中心圆孔板拉伸模型；
+- 生成左端固定、上边界承受向下均布载荷的二维悬臂梁模型；
+- 生成水平和竖直方向同时受控位移的二维方板双向拉伸模型；
 - 自动运行 Abaqus/Standard；
 - 读取 ODB 最后分析帧；
 - 输出全模型最大位移模和最大 Mises 应力；
@@ -82,6 +84,18 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\plate_with_hole_tension.json
 ```
 
+运行二维悬臂梁均布载荷弯曲示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\cantilever_bending.json
+```
+
+运行二维方板双向拉伸示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\biaxial_tension.json
+```
+
 结果保存在 `outputs/<运行时间>/`：
 
 - `input_config.json`：本次实际使用的参数；
@@ -112,6 +126,29 @@ Abaqus 的 CAE、ODB、状态和日志文件保存在 `work/runs/<运行时间>/
 
 圆孔附近存在应力集中，因此最大应力高于无孔板。该数值依赖孔径、板宽和孔边网格，正式使用前必须进行网格收敛性分析，不能把本示例结果直接当作工程许用值。
 
+悬臂梁默认配置采用长 100 mm、高 20 mm、厚 1 mm、上边界向下均布载荷 1 MPa、网格 2 mm。真实验证结果为：
+
+- 最大位移模：约 0.094622037 mm；
+- 最大 Mises 应力：约 71.0299 MPa；
+- 读取 561 个节点位移值和 500 个应力值；
+- `.sta` 状态：`THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
+
+方板双向拉伸默认配置采用 100 mm × 100 mm 方板，右边和上边各拉伸 0.1 mm，网格 5 mm。真实验证结果为：
+
+- 最大位移模：约 0.14142136 mm；
+- 最大 Mises 应力：300 MPa；
+- 读取 441 个节点位移值和 400 个应力值；
+- `.sta` 状态：`THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
+
+最大位移与理论值 `√(0.1² + 0.1²)` 一致；等双向平面应力的理论 Mises 应力为 `E × 0.001 / (1 - ν) = 300 MPa`。
+
+## 推荐入门顺序
+
+1. 矩形板单向拉伸：学习材料、位移边界、网格和理论值核对；
+2. 中心圆孔板拉伸：观察应力集中和局部网格敏感性；
+3. 悬臂梁均布载荷弯曲：学习固定端、分布载荷和弯曲变形；
+4. 方板双向拉伸：学习两个方向的边界条件和双向应力状态。
+
 ## 项目结构
 
 ```text
@@ -141,7 +178,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 28 项离线测试；
+- GitHub Actions 自动运行语法检查和 36 项离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；

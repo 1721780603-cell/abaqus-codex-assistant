@@ -57,6 +57,49 @@ def valid_hole_config():
     return config
 
 
+def valid_cantilever_config():
+    """返回一份有效的悬臂梁弯曲测试配置。"""
+
+    config = valid_config()
+    config["model"].update(
+        {
+            "type": "cantilever_bending",
+            "name": "CantileverBeam2D",
+        }
+    )
+    config["analysis"].update(
+        {
+            "step_name": "BendingStep",
+            "job_name": "cantilever_bending_2d",
+            "top_edge_pressure": 1.0,
+        }
+    )
+    del config["analysis"]["right_edge_displacement"]
+    return config
+
+
+def valid_biaxial_config():
+    """返回一份有效的方板双向拉伸测试配置。"""
+
+    config = valid_config()
+    config["model"].update(
+        {
+            "type": "biaxial_tension",
+            "name": "BiaxialPlate2D",
+            "height": 100.0,
+        }
+    )
+    config["analysis"].update(
+        {
+            "step_name": "BiaxialStep",
+            "job_name": "biaxial_tension_2d",
+            "top_edge_displacement": 0.1,
+            "mesh_size": 5.0,
+        }
+    )
+    return config
+
+
 class RectangleConfigurationTests(unittest.TestCase):
     """确认错误参数在进入 Abaqus 前被拦截。"""
 
@@ -141,6 +184,46 @@ class PlateWithHoleConfigurationTests(unittest.TestCase):
 
         config = valid_hole_config()
         config["model"]["type"] = "unknown_model"
+        with self.assertRaises(ConfigurationError):
+            validate_config(config)
+
+
+class CantileverConfigurationTests(unittest.TestCase):
+    """确认悬臂梁均布载荷在启动 Abaqus 前得到校验。"""
+
+    def test_valid_pressure_is_normalized(self):
+        """有效的均布载荷应转换为浮点数。"""
+
+        result = validate_config(valid_cantilever_config())
+        self.assertEqual(result["model"]["type"], "cantilever_bending")
+        self.assertEqual(result["analysis"]["top_edge_pressure"], 1.0)
+        self.assertNotIn("right_edge_displacement", result["analysis"])
+
+    def test_zero_pressure_is_rejected(self):
+        """零载荷不能形成有意义的弯曲入门算例。"""
+
+        config = valid_cantilever_config()
+        config["analysis"]["top_edge_pressure"] = 0.0
+        with self.assertRaises(ConfigurationError):
+            validate_config(config)
+
+
+class BiaxialConfigurationTests(unittest.TestCase):
+    """确认方板两个方向的拉伸位移都经过校验。"""
+
+    def test_two_displacements_are_normalized(self):
+        """水平和竖直拉伸位移都应转换为浮点数。"""
+
+        result = validate_config(valid_biaxial_config())
+        self.assertEqual(result["model"]["type"], "biaxial_tension")
+        self.assertEqual(result["analysis"]["right_edge_displacement"], 0.1)
+        self.assertEqual(result["analysis"]["top_edge_displacement"], 0.1)
+
+    def test_missing_top_displacement_is_rejected(self):
+        """缺少竖直拉伸位移时不能悄悄退化成单向拉伸。"""
+
+        config = valid_biaxial_config()
+        del config["analysis"]["top_edge_displacement"]
         with self.assertRaises(ConfigurationError):
             validate_config(config)
 

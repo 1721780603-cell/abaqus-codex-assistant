@@ -22,6 +22,8 @@ from abaqus_codex.report import write_chinese_report
 MODEL_SCRIPT_NAMES = {
     "rectangle": "rectangle_tension.py",
     "plate_with_hole": "plate_with_hole_tension.py",
+    "cantilever_bending": "cantilever_bending.py",
+    "biaxial_tension": "biaxial_tension.py",
 }
 
 

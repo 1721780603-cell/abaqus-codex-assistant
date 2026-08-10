@@ -13,6 +13,79 @@ def _number(value: object) -> str:
     return "{0:.8g}".format(float(value))
 
 
+def _model_specific_text(
+    model_type: str,
+    model: Mapping[str, object],
+    analysis: Mapping[str, object],
+    units: Mapping[str, object],
+) -> tuple[str, str, str, str]:
+    """返回模型标题、额外参数、边界条件和结果说明。"""
+
+    length_unit = units["length"]
+    stress_unit = units["stress"]
+
+    if model_type == "plate_with_hole":
+        title = "二维中心圆孔板拉伸分析报告"
+        extra_parameters = (
+            "- 圆孔半径：{0} {1}\n"
+            "- 孔边网格尺寸：{2} {1}\n"
+        ).format(
+            _number(model["hole_radius"]),
+            length_unit,
+            _number(analysis["hole_mesh_size"]),
+        )
+        boundary_conditions = (
+            "- 左边界：约束水平方向位移；\n"
+            "- 左下角：约束竖直方向位移，用于消除刚体运动；\n"
+            "- 右边界：施加 {0} {1} 的水平拉伸位移；"
+        ).format(_number(analysis["right_edge_displacement"]), length_unit)
+        note = (
+            "圆孔附近存在应力集中，最大应力会对孔边网格尺寸较敏感。"
+            "用于论文或工程项目前，应继续进行网格收敛性分析。"
+        )
+    elif model_type == "cantilever_bending":
+        title = "二维悬臂梁均布载荷弯曲分析报告"
+        extra_parameters = "- 上边界均布载荷：{0} {1}\n".format(
+            _number(analysis["top_edge_pressure"]), stress_unit
+        )
+        boundary_conditions = (
+            "- 左边界：约束水平和竖直方向位移，形成固定端；\n"
+            "- 上边界：施加竖直向下、大小为 {0} {1} 的均布载荷；"
+        ).format(_number(analysis["top_edge_pressure"]), stress_unit)
+        note = (
+            "固定端角点附近的最大应力可能对网格尺寸较敏感。"
+            "学习时可用材料力学梁理论核对位移趋势；用于正式项目时应进行网格收敛分析。"
+        )
+    elif model_type == "biaxial_tension":
+        title = "二维方板双向拉伸分析报告"
+        extra_parameters = ""
+        boundary_conditions = (
+            "- 左边界：约束水平方向位移；\n"
+            "- 下边界：约束竖直方向位移；\n"
+            "- 右边界：施加 {0} {1} 的水平拉伸位移；\n"
+            "- 上边界：施加 {2} {1} 的竖直拉伸位移；"
+        ).format(
+            _number(analysis["right_edge_displacement"]),
+            length_unit,
+            _number(analysis["top_edge_displacement"]),
+        )
+        note = (
+            "方板采用相同的两个方向应变时，板内应接近均匀双向应力状态。"
+            "可用平面应力理论值进行入门核对，但必须保证材料和几何参数使用同一套单位制。"
+        )
+    else:
+        title = "二维矩形板拉伸分析报告"
+        extra_parameters = ""
+        boundary_conditions = (
+            "- 左边界：约束水平方向位移；\n"
+            "- 左下角：约束竖直方向位移，用于消除刚体运动；\n"
+            "- 右边界：施加 {0} {1} 的水平拉伸位移；"
+        ).format(_number(analysis["right_edge_displacement"]), length_unit)
+        note = ""
+
+    return title, extra_parameters, boundary_conditions, note
+
+
 def build_chinese_report(results: Mapping[str, object]) -> str:
     """生成包含模型参数、边界条件和极值结果的中文报告文本。"""
 
@@ -25,23 +98,9 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
     stress_location = results["maximum_mises_stress_location"]
 
     model_type = str(model.get("type", "rectangle"))
-    if model_type == "plate_with_hole":
-        report_title = "二维中心圆孔板拉伸分析报告"
-        hole_geometry = "- 圆孔半径：{0} {1}\n".format(
-            _number(model["hole_radius"]), units["length"]
-        )
-        hole_mesh = "- 孔边网格尺寸：{0} {1}\n".format(
-            _number(analysis["hole_mesh_size"]), units["length"]
-        )
-        model_note = (
-            "圆孔附近存在应力集中，最大应力会对孔边网格尺寸较敏感。"
-            "用于论文或工程项目前，应继续进行网格收敛性分析。"
-        )
-    else:
-        report_title = "二维矩形板拉伸分析报告"
-        hole_geometry = ""
-        hole_mesh = ""
-        model_note = ""
+    report_title, extra_parameters, boundary_conditions, model_note = (
+        _model_specific_text(model_type, model, analysis, units)
+    )
 
     return """# {report_title}
 
@@ -58,16 +117,14 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
 - 板长：{length} {length_unit}
 - 板高：{height} {length_unit}
 - 板厚：{thickness} {length_unit}
-{hole_geometry}- 材料：{material_name}
+{extra_parameters}- 材料：{material_name}
 - 弹性模量：{youngs_modulus} {stress_unit}
 - 泊松比：{poisson_ratio}
 - 全局网格尺寸：{mesh_size} {length_unit}
-{hole_mesh}
+
 ## 3. 边界条件
 
-- 左边界：约束水平方向位移；
-- 左下角：约束竖直方向位移，用于消除刚体运动；
-- 右边界：施加 {prescribed_displacement} {length_unit} 的水平拉伸位移；
+{boundary_conditions}
 - 分析类型：二维平面应力、线弹性、静力分析。
 
 ## 4. 主要结果
@@ -93,15 +150,14 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
         length=_number(model["length"]),
         height=_number(model["height"]),
         thickness=_number(model["thickness"]),
-        hole_geometry=hole_geometry,
+        extra_parameters=extra_parameters,
         length_unit=units["length"],
         material_name=material["name"],
         youngs_modulus=_number(material["youngs_modulus"]),
         stress_unit=units["stress"],
         poisson_ratio=_number(material["poisson_ratio"]),
         mesh_size=_number(analysis["mesh_size"]),
-        hole_mesh=hole_mesh,
-        prescribed_displacement=_number(analysis["right_edge_displacement"]),
+        boundary_conditions=boundary_conditions,
         maximum_displacement=_number(results["maximum_displacement"]),
         u_instance=displacement_location["instance"],
         u_node=displacement_location["node_label"],

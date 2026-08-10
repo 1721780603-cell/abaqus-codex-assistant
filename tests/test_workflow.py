@@ -5,7 +5,12 @@ import unittest
 
 from abaqus_codex.configuration import validate_config
 from abaqus_codex.workflow import _abaqus_script_for_config
-from test_configuration import valid_config, valid_hole_config
+from test_configuration import (
+    valid_biaxial_config,
+    valid_cantilever_config,
+    valid_config,
+    valid_hole_config,
+)
 
 
 class AbaqusScriptSelectionTests(unittest.TestCase):
@@ -26,6 +31,24 @@ class AbaqusScriptSelectionTests(unittest.TestCase):
         self.assertEqual(
             _abaqus_script_for_config(config).name,
             "plate_with_hole_tension.py",
+        )
+
+    def test_cantilever_uses_bending_script(self):
+        """悬臂梁配置应选择均布载荷弯曲脚本。"""
+
+        config = validate_config(valid_cantilever_config())
+        self.assertEqual(
+            _abaqus_script_for_config(config).name,
+            "cantilever_bending.py",
+        )
+
+    def test_biaxial_plate_uses_biaxial_script(self):
+        """双向拉伸配置应选择方板双向加载脚本。"""
+
+        config = validate_config(valid_biaxial_config())
+        self.assertEqual(
+            _abaqus_script_for_config(config).name,
+            "biaxial_tension.py",
         )
 
 

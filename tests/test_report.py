@@ -5,7 +5,35 @@ import unittest
 
 from abaqus_codex.configuration import validate_config
 from abaqus_codex.report import build_chinese_report
-from test_configuration import valid_config, valid_hole_config
+from test_configuration import (
+    valid_biaxial_config,
+    valid_cantilever_config,
+    valid_config,
+    valid_hole_config,
+)
+
+
+def example_results(config):
+    """构造只用于报告测试的最小结果数据。"""
+
+    return {
+        "job_name": config["analysis"]["job_name"],
+        "model_name": config["model"]["name"],
+        "generated_at": "2026-08-11T10:00:00Z",
+        "abaqus_python_version": "2.7.15",
+        "maximum_displacement": 0.2,
+        "maximum_displacement_location": {
+            "instance": "Part-1",
+            "node_label": 10,
+        },
+        "maximum_mises_stress": 300.0,
+        "maximum_mises_stress_location": {
+            "instance": "Part-1",
+            "element_label": 20,
+            "integration_point": 1,
+        },
+        "config": validate_config(config),
+    }
 
 
 class ChineseReportTests(unittest.TestCase):
@@ -67,6 +95,28 @@ class ChineseReportTests(unittest.TestCase):
         self.assertIn("圆孔半径：5 mm", report)
         self.assertIn("孔边网格尺寸：0.5 mm", report)
         self.assertIn("网格收敛性分析", report)
+
+    def test_cantilever_report_contains_load_and_fixed_end(self):
+        """悬臂梁报告应明确写出固定端和向下均布载荷。"""
+
+        report = build_chinese_report(
+            example_results(valid_cantilever_config())
+        )
+
+        self.assertIn("二维悬臂梁均布载荷弯曲分析报告", report)
+        self.assertIn("上边界均布载荷：1 MPa", report)
+        self.assertIn("形成固定端", report)
+        self.assertIn("材料力学梁理论", report)
+
+    def test_biaxial_report_contains_two_displacements(self):
+        """双向拉伸报告应分别记录水平和竖直位移。"""
+
+        report = build_chinese_report(example_results(valid_biaxial_config()))
+
+        self.assertIn("二维方板双向拉伸分析报告", report)
+        self.assertIn("右边界：施加 0.1 mm 的水平拉伸位移", report)
+        self.assertIn("上边界：施加 0.1 mm 的竖直拉伸位移", report)
+        self.assertIn("均匀双向应力状态", report)
 
 
 if __name__ == "__main__":

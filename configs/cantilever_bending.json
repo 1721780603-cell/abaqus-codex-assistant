@@ -1,0 +1,25 @@
+{
+  "model": {
+    "type": "cantilever_bending",
+    "name": "CantileverBeam2D",
+    "length": 100.0,
+    "height": 20.0,
+    "thickness": 1.0
+  },
+  "material": {
+    "name": "Steel",
+    "youngs_modulus": 210000.0,
+    "poisson_ratio": 0.3
+  },
+  "analysis": {
+    "step_name": "BendingStep",
+    "job_name": "cantilever_bending_2d",
+    "top_edge_pressure": 1.0,
+    "mesh_size": 2.0,
+    "num_cpus": 1
+  },
+  "units": {
+    "length": "mm",
+    "stress": "MPa"
+  }
+}

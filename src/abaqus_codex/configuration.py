@@ -15,9 +15,13 @@ JOB_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,39}$")
 # 旧配置没有 type 字段，因此必须继续把它解释为最初的矩形板模型。
 MODEL_TYPE_RECTANGLE = "rectangle"
 MODEL_TYPE_PLATE_WITH_HOLE = "plate_with_hole"
+MODEL_TYPE_CANTILEVER_BENDING = "cantilever_bending"
+MODEL_TYPE_BIAXIAL_TENSION = "biaxial_tension"
 SUPPORTED_MODEL_TYPES = (
     MODEL_TYPE_RECTANGLE,
     MODEL_TYPE_PLATE_WITH_HOLE,
+    MODEL_TYPE_CANTILEVER_BENDING,
+    MODEL_TYPE_BIAXIAL_TENSION,
 )
 
 
@@ -86,9 +90,6 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
     thickness = _positive_number(model, "thickness", "板厚")
     youngs_modulus = _positive_number(material, "youngs_modulus", "弹性模量")
     poisson_ratio = _number(material, "poisson_ratio", "泊松比")
-    displacement = _positive_number(
-        analysis, "right_edge_displacement", "右边界拉伸位移"
-    )
     mesh_size = _positive_number(analysis, "mesh_size", "网格尺寸")
 
     if not -1.0 < poisson_ratio < 0.5:
@@ -128,10 +129,26 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
     normalized_analysis = {
         "step_name": _text(analysis, "step_name", "分析步名称"),
         "job_name": job_name,
-        "right_edge_displacement": displacement,
         "mesh_size": mesh_size,
         "num_cpus": num_cpus_value,
     }
+    # 不同模型采用不同载荷参数，按模型分别校验可以给初学者更准确的错误提示。
+    if model_type in (
+        MODEL_TYPE_RECTANGLE,
+        MODEL_TYPE_PLATE_WITH_HOLE,
+        MODEL_TYPE_BIAXIAL_TENSION,
+    ):
+        normalized_analysis["right_edge_displacement"] = _positive_number(
+            analysis, "right_edge_displacement", "右边界拉伸位移"
+        )
+    if model_type == MODEL_TYPE_CANTILEVER_BENDING:
+        normalized_analysis["top_edge_pressure"] = _positive_number(
+            analysis, "top_edge_pressure", "上边界均布压力"
+        )
+    if model_type == MODEL_TYPE_BIAXIAL_TENSION:
+        normalized_analysis["top_edge_displacement"] = _positive_number(
+            analysis, "top_edge_displacement", "上边界拉伸位移"
+        )
     if model_type == MODEL_TYPE_PLATE_WITH_HOLE:
         default_hole_mesh_size = min(mesh_size, float(hole_radius) / 4.0)
         if "hole_mesh_size" in analysis:

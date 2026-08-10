@@ -59,6 +59,18 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\plate_with_hole_tension.json
 ```
 
+运行悬臂梁均布载荷弯曲：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\cantilever_bending.json
+```
+
+运行方板双向拉伸：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\biaxial_tension.json
+```
+
 程序会显示结果 JSON 和中文报告的绝对路径。计算失败时先查看 `work/runs/<运行时间>/abaqus_console.log`、`.sta`、`.msg` 和 `abaqus.rpy`。
 
 ## 6. 修改参数
@@ -67,10 +79,14 @@ py -m venv .venv
 
 - 长、宽、厚度；
 - 弹性模量和泊松比；
-- 右边拉伸位移；
+- 单向拉伸的右边位移；
+- 悬臂梁的上边界均布载荷；
+- 双向拉伸的右边和上边位移；
 - 网格尺寸；
 - 圆孔板的孔半径和孔边局部网格尺寸；
 - CPU 数量；
 - 长度和应力单位标签。
 
-`model.type` 使用 `rectangle` 或 `plate_with_hole`。圆孔板还会检查孔直径小于板长和板高，并要求孔边网格不比全局网格更粗。Abaqus 不自动换算单位，所有输入必须使用一致单位制。
+`model.type` 可使用 `rectangle`、`plate_with_hole`、`cantilever_bending` 或 `biaxial_tension`。圆孔板还会检查孔直径小于板长和板高，并要求孔边网格不比全局网格更粗；悬臂梁载荷和双向拉伸的两个位移必须大于零。Abaqus 不自动换算单位，所有输入必须使用一致单位制。
+
+建议按矩形板、圆孔板、悬臂梁、双向拉伸的顺序学习。每次只修改一个参数，并先预测结果变大还是变小，再运行 Abaqus 核对。
