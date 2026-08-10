@@ -10,6 +10,7 @@ from test_configuration import (
     valid_cantilever_config,
     valid_config,
     valid_hole_config,
+    valid_moving_load_config,
 )
 
 
@@ -117,6 +118,48 @@ class ChineseReportTests(unittest.TestCase):
         self.assertIn("右边界：施加 0.1 mm 的水平拉伸位移", report)
         self.assertIn("上边界：施加 0.1 mm 的竖直拉伸位移", report)
         self.assertIn("均匀双向应力状态", report)
+
+    def test_moving_load_report_contains_dynamic_information(self):
+        """移动轮载报告应包含 DLOAD、速度、动力时间和竖向位移。"""
+
+        config = validate_config(valid_moving_load_config())
+        results = {
+            "job_name": config["analysis"]["job_name"],
+            "model_name": config["model"]["name"],
+            "generated_at": "2026-08-11T10:00:00Z",
+            "abaqus_python_version": "2.7.15",
+            "user_subroutine": "moving_pressure_dload.for",
+            "frame_count": 211,
+            "maximum_displacement": 0.02,
+            "maximum_displacement_location": {
+                "instance": "ROAD-1",
+                "node_label": 10,
+                "frame_time": 0.2,
+            },
+            "maximum_vertical_displacement": 0.019,
+            "maximum_vertical_displacement_location": {
+                "instance": "ROAD-1",
+                "node_label": 10,
+                "frame_time": 0.2,
+                "signed_value": -0.019,
+            },
+            "maximum_mises_stress": 0.8,
+            "maximum_mises_stress_location": {
+                "instance": "ROAD-1",
+                "element_label": 20,
+                "integration_point": 1,
+                "frame_time": 0.21,
+            },
+            "config": config,
+        }
+
+        report = build_chinese_report(results)
+
+        self.assertIn("三维路面单轮移动载荷教学分析报告", report)
+        self.assertIn("moving_pressure_dload.for", report)
+        self.assertIn("约 36 km/h", report)
+        self.assertIn("全程最大竖向位移绝对值：0.019 mm", report)
+        self.assertIn("不能直接代表三级公路正式设计", report)
 
 
 if __name__ == "__main__":

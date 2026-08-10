@@ -1,0 +1,33 @@
+{
+  "model": {
+    "type": "moving_load_road",
+    "name": "MovingLoadRoad3D",
+    "length": 4000.0,
+    "width": 2000.0,
+    "depth": 600.0
+  },
+  "material": {
+    "name": "TeachingElasticRoad",
+    "youngs_modulus": 5000.0,
+    "poisson_ratio": 0.35,
+    "density": 2.4e-9
+  },
+  "analysis": {
+    "step_name": "MovingLoadStep",
+    "job_name": "moving_load_road_3d",
+    "load_pressure": 0.7,
+    "load_speed": 10000.0,
+    "load_length": 200.0,
+    "load_width": 200.0,
+    "load_center_y": 1000.0,
+    "mesh_size": 200.0,
+    "max_time_increment": 0.002,
+    "num_cpus": 1
+  },
+  "units": {
+    "length": "mm",
+    "stress": "MPa",
+    "time": "s",
+    "mass": "tonne"
+  }
+}

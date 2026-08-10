@@ -27,3 +27,6 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+abaqus_codex = ["user_subroutines/*.for.in"]

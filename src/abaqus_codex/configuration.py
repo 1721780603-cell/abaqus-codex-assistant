@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""读取并校验二维板拉伸模型的 JSON 配置。"""
+"""读取并校验项目内置 Abaqus 模型的 JSON 配置。"""
 
 from __future__ import annotations
 
@@ -17,11 +17,13 @@ MODEL_TYPE_RECTANGLE = "rectangle"
 MODEL_TYPE_PLATE_WITH_HOLE = "plate_with_hole"
 MODEL_TYPE_CANTILEVER_BENDING = "cantilever_bending"
 MODEL_TYPE_BIAXIAL_TENSION = "biaxial_tension"
+MODEL_TYPE_MOVING_LOAD_ROAD = "moving_load_road"
 SUPPORTED_MODEL_TYPES = (
     MODEL_TYPE_RECTANGLE,
     MODEL_TYPE_PLATE_WITH_HOLE,
     MODEL_TYPE_CANTILEVER_BENDING,
     MODEL_TYPE_BIAXIAL_TENSION,
+    MODEL_TYPE_MOVING_LOAD_ROAD,
 )
 
 
@@ -85,26 +87,36 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
     units = _mapping(data, "units")
 
     model_type = _model_type(model)
-    length = _positive_number(model, "length", "板长")
-    height = _positive_number(model, "height", "板高")
-    thickness = _positive_number(model, "thickness", "板厚")
+    length = _positive_number(model, "length", "模型长度")
     youngs_modulus = _positive_number(material, "youngs_modulus", "弹性模量")
     poisson_ratio = _number(material, "poisson_ratio", "泊松比")
     mesh_size = _positive_number(analysis, "mesh_size", "网格尺寸")
 
     if not -1.0 < poisson_ratio < 0.5:
         raise ConfigurationError("泊松比必须位于 -1 和 0.5 之间。")
-    if mesh_size > min(length, height):
-        raise ConfigurationError("网格尺寸不能大于板的最短边。")
 
-    # 圆孔位于板中心，因此孔直径必须严格小于板的长和高。
+    # 三维路面使用宽度和深度，其余入门模型继续使用板高和板厚。
     normalized_model = {
         "type": model_type,
         "name": _text(model, "name", "模型名"),
         "length": length,
-        "height": height,
-        "thickness": thickness,
     }
+    if model_type == MODEL_TYPE_MOVING_LOAD_ROAD:
+        width = _positive_number(model, "width", "路面宽度")
+        depth = _positive_number(model, "depth", "路面深度")
+        if mesh_size > min(length, width, depth):
+            raise ConfigurationError("网格尺寸不能大于三维路面的最短边。")
+        normalized_model["width"] = width
+        normalized_model["depth"] = depth
+    else:
+        height = _positive_number(model, "height", "板高")
+        thickness = _positive_number(model, "thickness", "板厚")
+        if mesh_size > min(length, height):
+            raise ConfigurationError("网格尺寸不能大于板的最短边。")
+        normalized_model["height"] = height
+        normalized_model["thickness"] = thickness
+
+    # 圆孔位于板中心，因此孔直径必须严格小于板的长和高。
     hole_radius = None
     if model_type == MODEL_TYPE_PLATE_WITH_HOLE:
         hole_radius = _positive_number(model, "hole_radius", "圆孔半径")
@@ -149,6 +161,45 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
         normalized_analysis["top_edge_displacement"] = _positive_number(
             analysis, "top_edge_displacement", "上边界拉伸位移"
         )
+    if model_type == MODEL_TYPE_MOVING_LOAD_ROAD:
+        load_pressure = _positive_number(
+            analysis, "load_pressure", "移动轮载接触压力"
+        )
+        load_speed = _positive_number(analysis, "load_speed", "轮载移动速度")
+        load_length = _positive_number(
+            analysis, "load_length", "轮载接触区长度"
+        )
+        load_width = _positive_number(
+            analysis, "load_width", "轮载接触区宽度"
+        )
+        load_center_y = _number(
+            analysis, "load_center_y", "轮载横向中心坐标"
+        )
+        max_time_increment = _positive_number(
+            analysis, "max_time_increment", "最大时间增量"
+        )
+        if load_length > length or load_width > width:
+            raise ConfigurationError("轮载接触区不能大于路面顶面。")
+        half_load_width = load_width / 2.0
+        if not half_load_width <= load_center_y <= width - half_load_width:
+            raise ConfigurationError("轮载横向中心必须保证接触区完整位于路面内。")
+        passage_time = load_length / load_speed
+        if max_time_increment > passage_time / 2.0:
+            raise ConfigurationError(
+                "最大时间增量过大；轮载经过自身长度时至少需要两个增量。"
+            )
+        normalized_analysis.update(
+            {
+                "load_pressure": load_pressure,
+                "load_speed": load_speed,
+                "load_length": load_length,
+                "load_width": load_width,
+                "load_center_y": load_center_y,
+                "load_start_x": -load_length / 2.0,
+                "time_period": (length + load_length) / load_speed,
+                "max_time_increment": max_time_increment,
+            }
+        )
     if model_type == MODEL_TYPE_PLATE_WITH_HOLE:
         default_hole_mesh_size = min(mesh_size, float(hole_radius) / 4.0)
         if "hole_mesh_size" in analysis:
@@ -162,18 +213,27 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
         normalized_analysis["hole_mesh_size"] = hole_mesh_size
 
     # 返回新的字典，避免后续步骤意外修改用户原始配置。
+    normalized_material = {
+        "name": _text(material, "name", "材料名"),
+        "youngs_modulus": youngs_modulus,
+        "poisson_ratio": poisson_ratio,
+    }
+    normalized_units = {
+        "length": _text(units, "length", "长度单位"),
+        "stress": _text(units, "stress", "应力单位"),
+    }
+    if model_type == MODEL_TYPE_MOVING_LOAD_ROAD:
+        normalized_material["density"] = _positive_number(
+            material, "density", "材料密度"
+        )
+        normalized_units["time"] = _text(units, "time", "时间单位")
+        normalized_units["mass"] = _text(units, "mass", "质量单位")
+
     return {
         "model": normalized_model,
-        "material": {
-            "name": _text(material, "name", "材料名"),
-            "youngs_modulus": youngs_modulus,
-            "poisson_ratio": poisson_ratio,
-        },
+        "material": normalized_material,
         "analysis": normalized_analysis,
-        "units": {
-            "length": _text(units, "length", "长度单位"),
-            "stress": _text(units, "stress", "应力单位"),
-        },
+        "units": normalized_units,
     }
 
 

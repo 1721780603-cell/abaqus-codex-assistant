@@ -100,6 +100,44 @@ def valid_biaxial_config():
     return config
 
 
+def valid_moving_load_config():
+    """返回一份有效的三维路面移动轮载测试配置。"""
+
+    return {
+        "model": {
+            "type": "moving_load_road",
+            "name": "MovingLoadRoad3D",
+            "length": 4000.0,
+            "width": 2000.0,
+            "depth": 600.0,
+        },
+        "material": {
+            "name": "TeachingElasticRoad",
+            "youngs_modulus": 5000.0,
+            "poisson_ratio": 0.35,
+            "density": 2.4e-9,
+        },
+        "analysis": {
+            "step_name": "MovingLoadStep",
+            "job_name": "moving_load_road_3d",
+            "load_pressure": 0.7,
+            "load_speed": 10000.0,
+            "load_length": 200.0,
+            "load_width": 200.0,
+            "load_center_y": 1000.0,
+            "mesh_size": 200.0,
+            "max_time_increment": 0.002,
+            "num_cpus": 1,
+        },
+        "units": {
+            "length": "mm",
+            "stress": "MPa",
+            "time": "s",
+            "mass": "tonne",
+        },
+    }
+
+
 class RectangleConfigurationTests(unittest.TestCase):
     """确认错误参数在进入 Abaqus 前被拦截。"""
 
@@ -224,6 +262,43 @@ class BiaxialConfigurationTests(unittest.TestCase):
 
         config = valid_biaxial_config()
         del config["analysis"]["top_edge_displacement"]
+        with self.assertRaises(ConfigurationError):
+            validate_config(config)
+
+
+class MovingLoadRoadConfigurationTests(unittest.TestCase):
+    """确认三维路面和移动轮载参数在编译子程序前得到校验。"""
+
+    def test_valid_config_adds_path_and_time(self):
+        """有效配置应自动计算轮载起点和完整通过路面的时长。"""
+
+        result = validate_config(valid_moving_load_config())
+        self.assertEqual(result["model"]["width"], 2000.0)
+        self.assertEqual(result["material"]["density"], 2.4e-9)
+        self.assertEqual(result["analysis"]["load_start_x"], -100.0)
+        self.assertAlmostEqual(result["analysis"]["time_period"], 0.42)
+
+    def test_oversized_contact_patch_is_rejected(self):
+        """轮载接触区不能比路面顶面更大。"""
+
+        config = valid_moving_load_config()
+        config["analysis"]["load_width"] = 2200.0
+        with self.assertRaises(ConfigurationError):
+            validate_config(config)
+
+    def test_contact_patch_crossing_side_is_rejected(self):
+        """横向中心太靠边时应提示接触区越界。"""
+
+        config = valid_moving_load_config()
+        config["analysis"]["load_center_y"] = 50.0
+        with self.assertRaises(ConfigurationError):
+            validate_config(config)
+
+    def test_coarse_time_increment_is_rejected(self):
+        """时间增量过大时不能可靠表示轮载移动。"""
+
+        config = valid_moving_load_config()
+        config["analysis"]["max_time_increment"] = 0.02
         with self.assertRaises(ConfigurationError):
             validate_config(config)
 

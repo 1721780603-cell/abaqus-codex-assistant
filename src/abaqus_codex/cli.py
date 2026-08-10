@@ -34,7 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
     root = project_root()
     parser = argparse.ArgumentParser(
         prog="abaqus-codex",
-        description="面向初学者的 Abaqus 环境体检与二维板拉伸工具。",
+        description="面向初学者的 Abaqus 环境体检、建模和结果报告工具。",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -65,13 +65,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     run_parser = subparsers.add_parser(
-        "run", help="运行二维板拉伸分析并生成中文报告。"
+        "run", help="运行内置 Abaqus 示例并生成中文报告。"
     )
     run_parser.add_argument(
         "--config",
         type=Path,
         default=root / "configs" / "rectangle_tension.json",
-        help="二维板 JSON 配置文件。",
+        help="内置 Abaqus 模型的 JSON 配置文件。",
     )
     run_parser.add_argument(
         "--work-root",

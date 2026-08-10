@@ -16,6 +16,7 @@ from typing import Dict, Optional
 
 from abaqus_codex.configuration import load_config, write_json
 from abaqus_codex.report import write_chinese_report
+from abaqus_codex.user_subroutine import prepare_user_subroutine
 
 
 # 配置中的模型类型只映射到项目自带脚本，不能由用户传入任意脚本路径。
@@ -24,6 +25,7 @@ MODEL_SCRIPT_NAMES = {
     "plate_with_hole": "plate_with_hole_tension.py",
     "cantilever_bending": "cantilever_bending.py",
     "biaxial_tension": "biaxial_tension.py",
+    "moving_load_road": "moving_load_road.py",
 }
 
 
@@ -126,12 +128,15 @@ def run_analysis(
     write_json(published_config_path, config)
 
     abaqus_script = _abaqus_script_for_config(config)
+    user_subroutine_path = prepare_user_subroutine(config, work_dir)
     command = abqpy_command_prefix + [
         "cae",
         str(abaqus_script),
         str(normalized_config_path),
         str(results_path),
     ]
+    if user_subroutine_path is not None:
+        command.append(str(user_subroutine_path))
 
     try:
         completed = subprocess.run(

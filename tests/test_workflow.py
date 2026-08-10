@@ -10,6 +10,7 @@ from test_configuration import (
     valid_cantilever_config,
     valid_config,
     valid_hole_config,
+    valid_moving_load_config,
 )
 
 
@@ -49,6 +50,15 @@ class AbaqusScriptSelectionTests(unittest.TestCase):
         self.assertEqual(
             _abaqus_script_for_config(config).name,
             "biaxial_tension.py",
+        )
+
+    def test_moving_load_uses_road_script(self):
+        """三维移动轮载配置应选择需要 DLOAD 的路面脚本。"""
+
+        config = validate_config(valid_moving_load_config())
+        self.assertEqual(
+            _abaqus_script_for_config(config).name,
+            "moving_load_road.py",
         )
 
 

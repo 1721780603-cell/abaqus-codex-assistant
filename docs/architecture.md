@@ -38,6 +38,9 @@ Python 3 生成中文 report.md
 - `abaqus_scripts/plate_with_hole_tension.py`：中心圆孔板和孔边局部网格逻辑；
 - `abaqus_scripts/cantilever_bending.py`：悬臂梁固定端和均布载荷逻辑；
 - `abaqus_scripts/biaxial_tension.py`：方板两个方向的位移边界逻辑；
+- `abaqus_scripts/moving_load_road.py`：三维路面、动力隐式步和全帧结果读取；
+- `user_subroutine.py`：把校验后的移动轮载参数写入本次运行的 Fortran 文件；
+- `user_subroutines/moving_pressure_dload.for.in`：受控的移动矩形压力 DLOAD 模板；
 - `report.py`：中文 Markdown 报告；
 - `cli.py`：统一命令行。
 
