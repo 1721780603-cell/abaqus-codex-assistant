@@ -1,0 +1,81 @@
+name: 缺陷报告
+description: 报告可以稳定复现的程序错误或 Abaqus 兼容问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题。请先删除模型路径、用户名、许可证信息和其他敏感内容。
+
+  - type: input
+    id: abaqus_version
+    attributes:
+      label: Abaqus 版本
+      description: 例如 Abaqus 2021。
+      placeholder: Abaqus 2021
+    validations:
+      required: true
+
+  - type: input
+    id: abqpy_version
+    attributes:
+      label: abqpy 版本
+      description: 可通过环境体检查看。
+      placeholder: 2021.7.3
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 64 位
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: 执行命令
+      description: 请提供触发问题的最小命令，不要包含 Token 或密码。
+      render: powershell
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请按顺序说明操作和输入参数。
+      placeholder: |
+        1. 运行环境体检
+        2. 修改参数……
+        3. 运行分析……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为和已脱敏日志
+      description: 优先提供 abaqus_console.log 最后 30 行及 .sta 状态；不要上传机密 ODB。
+      render: shell
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已删除密码、Token、Cookie、许可证信息和机密工程数据。
+          required: true
+        - label: 我已确认仓库中没有相同的开放 Issue。
+          required: true

@@ -1,0 +1,41 @@
+# Python 虚拟环境（只保留在用户电脑中，不提交到 GitHub）
+.venv/
+
+# 用户本机的场景选择不提交到公共仓库
+configs/user_profile.json
+
+# Python 产生的缓存文件
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 本项目的临时文件和最终输出
+work/*
+outputs/*
+!work/.gitkeep
+!outputs/.gitkeep
+
+# Abaqus 作业文件和大型结果文件
+*.odb
+*.lck
+*.sta
+*.msg
+*.dat
+*.com
+*.prt
+*.sim
+*.res
+*.pac
+*.stt
+*.023
+
+# 编辑器和操作系统临时文件
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

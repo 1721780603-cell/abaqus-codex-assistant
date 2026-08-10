@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title description">
+  <title id="title">Abaqus Codex Assistant 真实验证结果</title>
+  <desc id="description">环境体检通过，并完成二维矩形板拉伸分析，最大位移为 0.10017984 毫米，最大 Mises 应力为 210 兆帕。</desc>
+  <rect width="1200" height="520" rx="18" fill="#0d1117"/>
+  <rect x="0" y="0" width="1200" height="58" rx="18" fill="#161b22"/>
+  <circle cx="34" cy="29" r="8" fill="#ff5f56"/>
+  <circle cx="60" cy="29" r="8" fill="#ffbd2e"/>
+  <circle cx="86" cy="29" r="8" fill="#27c93f"/>
+  <text x="120" y="36" fill="#c9d1d9" font-family="Consolas, 'Microsoft YaHei', monospace" font-size="18">Abaqus Codex Assistant — 已验证运行</text>
+  <g fill="#c9d1d9" font-family="Consolas, 'Microsoft YaHei', monospace" font-size="20">
+    <text x="38" y="104" fill="#58a6ff">PS&gt; abaqus-codex doctor</text>
+    <text x="38" y="145">Abaqus：2021 ✓</text>
+    <text x="38" y="182">abqpy：2021.7.3，版本匹配 ✓</text>
+    <text x="38" y="219">Abaqus MCP：已注册并通过启动验证 ✓</text>
+    <text x="38" y="256">本地基础模式：可用    Codex 智能模式：可用</text>
+    <text x="38" y="310" fill="#58a6ff">PS&gt; abaqus-codex run</text>
+    <text x="38" y="351">Abaqus/Standard：THE ANALYSIS HAS COMPLETED SUCCESSFULLY</text>
+    <text x="38" y="392" fill="#7ee787">最大位移模：0.10017984 mm</text>
+    <text x="38" y="433" fill="#7ee787">最大 Mises 应力：210 MPa</text>
+    <text x="38" y="478" fill="#8b949e">Windows 11 · Abaqus 2021 · 20 项离线测试通过</text>
+  </g>
+</svg>

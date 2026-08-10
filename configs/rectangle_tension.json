@@ -1,0 +1,24 @@
+{
+  "model": {
+    "name": "RectanglePlate2D",
+    "length": 100.0,
+    "height": 20.0,
+    "thickness": 1.0
+  },
+  "material": {
+    "name": "Steel",
+    "youngs_modulus": 210000.0,
+    "poisson_ratio": 0.3
+  },
+  "analysis": {
+    "step_name": "TensionStep",
+    "job_name": "rectangle_tension_2d",
+    "right_edge_displacement": 0.1,
+    "mesh_size": 2.0,
+    "num_cpus": 1
+  },
+  "units": {
+    "length": "mm",
+    "stress": "MPa"
+  }
+}
