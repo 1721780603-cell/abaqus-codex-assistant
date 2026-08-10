@@ -35,6 +35,7 @@ Python 3 生成中文 report.md
 - `scenario.py`：最小化场景配置；
 - `workflow.py`：创建独立运行目录并协调全流程；
 - `abaqus_scripts/rectangle_tension.py`：Abaqus 2021/Python 2.7 端逻辑；
+- `abaqus_scripts/plate_with_hole_tension.py`：中心圆孔板和孔边局部网格逻辑；
 - `report.py`：中文 Markdown 报告；
 - `cli.py`：统一命令行。
 

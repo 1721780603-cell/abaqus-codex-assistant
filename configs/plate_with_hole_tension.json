@@ -1,10 +1,11 @@
 {
   "model": {
-    "type": "rectangle",
-    "name": "RectanglePlate2D",
+    "type": "plate_with_hole",
+    "name": "PlateWithHole2D",
     "length": 100.0,
-    "height": 20.0,
-    "thickness": 1.0
+    "height": 50.0,
+    "thickness": 1.0,
+    "hole_radius": 5.0
   },
   "material": {
     "name": "Steel",
@@ -13,9 +14,10 @@
   },
   "analysis": {
     "step_name": "TensionStep",
-    "job_name": "rectangle_tension_2d",
+    "job_name": "plate_with_hole_tension_2d",
     "right_edge_displacement": 0.1,
     "mesh_size": 2.0,
+    "hole_mesh_size": 0.5,
     "num_cpus": 1
   },
   "units": {

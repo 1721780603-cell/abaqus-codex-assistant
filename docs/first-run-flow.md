@@ -5,7 +5,7 @@
 运行：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe doctor
+.\.venv\Scripts\python.exe -m abaqus_codex doctor
 ```
 
 程序依次检查 Abaqus 命令与版本、Abaqus 自带 Python、abqpy 版本、MCP 文件、Codex 注册和 MCP 本地导入。
@@ -17,7 +17,7 @@
 本地基础模式不需要 MCP。智能模式缺少 MCP 时，用户阅读将发生的下载、文件复制和 Codex 配置变更后，运行：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe mcp-setup --yes
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-setup --yes
 ```
 
 没有 `--yes` 时安装器不会修改电脑。已有用户文件不会被覆盖，安装后必须再次导入服务器验证。
@@ -28,4 +28,4 @@
 
 ## 4. 第一阶段限制
 
-当前计算模板只实现二维矩形板拉伸。论文下载、论文参数证据表、参数化批处理和复杂工程审核属于后续阶段。
+当前计算模板实现二维矩形板和中心圆孔板拉伸。论文下载、论文参数证据表、参数化批处理、网格收敛自动化和复杂工程审核属于后续阶段。

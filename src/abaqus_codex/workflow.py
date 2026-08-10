@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import locale
 import math
 import shutil
@@ -13,8 +14,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-from abaqus_codex.configuration import load_rectangle_config, write_json
+from abaqus_codex.configuration import load_config, write_json
 from abaqus_codex.report import write_chinese_report
+
+
+# 配置中的模型类型只映射到项目自带脚本，不能由用户传入任意脚本路径。
+MODEL_SCRIPT_NAMES = {
+    "rectangle": "rectangle_tension.py",
+    "plate_with_hole": "plate_with_hole_tension.py",
+}
 
 
 def find_abqpy_command() -> Optional[Path]:
@@ -27,6 +35,17 @@ def find_abqpy_command() -> Optional[Path]:
 
     path_command = shutil.which("abqpy")
     return Path(path_command).resolve() if path_command else None
+
+
+def build_abqpy_command_prefix() -> Optional[list[str]]:
+    """生成不依赖虚拟环境绝对安装路径的 abqpy 命令前缀。"""
+
+    # Windows 的 console_scripts 启动器会记录安装时的绝对路径；项目移动后
+    # 直接运行 abqpy.exe 可能失效，因此优先由当前解释器启动同一模块。
+    if importlib.util.find_spec("abqpy") is not None:
+        return [str(Path(sys.executable).resolve()), "-m", "abqpy"]
+    command = find_abqpy_command()
+    return [str(command)] if command is not None else None
 
 
 def _decode_output(data: bytes) -> str:
@@ -61,7 +80,20 @@ def _load_results(path: Path) -> Dict[str, object]:
     return results
 
 
-def run_rectangle_analysis(
+def _abaqus_script_for_config(config: Dict[str, object]) -> Path:
+    """根据已校验的模型类型返回固定的 Abaqus 脚本路径。"""
+
+    model_type = str(config["model"]["type"])
+    script_name = MODEL_SCRIPT_NAMES.get(model_type)
+    if script_name is None:
+        raise RuntimeError("没有支持该模型类型的 Abaqus 脚本：{0}".format(model_type))
+    script_path = Path(__file__).resolve().parent / "abaqus_scripts" / script_name
+    if not script_path.is_file():
+        raise RuntimeError("项目缺少 Abaqus 脚本：{0}".format(script_path))
+    return script_path
+
+
+def run_analysis(
     config_path: Path,
     work_root: Path,
     output_root: Path,
@@ -72,9 +104,9 @@ def run_rectangle_analysis(
     if timeout_seconds < 1:
         raise RuntimeError("运行超时秒数必须大于零。")
 
-    config = load_rectangle_config(config_path)
-    abqpy_command = find_abqpy_command()
-    if abqpy_command is None:
+    config = load_config(config_path)
+    abqpy_command_prefix = build_abqpy_command_prefix()
+    if abqpy_command_prefix is None:
         raise RuntimeError("没有找到 abqpy，请先运行环境体检并安装匹配版本。")
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -91,13 +123,8 @@ def run_rectangle_analysis(
     write_json(normalized_config_path, config)
     write_json(published_config_path, config)
 
-    abaqus_script = (
-        Path(__file__).resolve().parent
-        / "abaqus_scripts"
-        / "rectangle_tension.py"
-    )
-    command = [
-        str(abqpy_command),
+    abaqus_script = _abaqus_script_for_config(config)
+    command = abqpy_command_prefix + [
         "cae",
         str(abaqus_script),
         str(normalized_config_path),
@@ -151,4 +178,18 @@ def run_rectangle_analysis(
         "console_log_path": str(console_log_path.resolve()),
         "maximum_displacement": results["maximum_displacement"],
         "maximum_mises_stress": results["maximum_mises_stress"],
+        "length_unit": results["config"]["units"]["length"],
+        "stress_unit": results["config"]["units"]["stress"],
+        "model_type": results["config"]["model"]["type"],
     }
+
+
+def run_rectangle_analysis(
+    config_path: Path,
+    work_root: Path,
+    output_root: Path,
+    timeout_seconds: int = 1800,
+) -> Dict[str, object]:
+    """保留第一版入口，已有代码仍可用同一函数名运行分析。"""
+
+    return run_analysis(config_path, work_root, output_root, timeout_seconds)

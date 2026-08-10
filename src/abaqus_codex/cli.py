@@ -34,7 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
     root = project_root()
     parser = argparse.ArgumentParser(
         prog="abaqus-codex",
-        description="面向初学者的 Abaqus 环境体检与二维矩形板拉伸工具。",
+        description="面向初学者的 Abaqus 环境体检与二维板拉伸工具。",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -65,13 +65,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     run_parser = subparsers.add_parser(
-        "run", help="运行二维矩形板拉伸分析并生成中文报告。"
+        "run", help="运行二维板拉伸分析并生成中文报告。"
     )
     run_parser.add_argument(
         "--config",
         type=Path,
         default=root / "configs" / "rectangle_tension.json",
-        help="矩形板 JSON 配置文件。",
+        help="二维板 JSON 配置文件。",
     )
     run_parser.add_argument(
         "--work-root",
@@ -119,9 +119,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if args.command == "run":
             # 延后导入，保证仅使用 doctor/configure 时不加载求解流程。
-            from abaqus_codex.workflow import run_rectangle_analysis
+            from abaqus_codex.workflow import run_analysis
 
-            result = run_rectangle_analysis(
+            result = run_analysis(
                 config_path=args.config.resolve(),
                 work_root=args.work_root.resolve(),
                 output_root=args.output_root.resolve(),
@@ -130,6 +130,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("分析完成。")
             print("结果文件：{0}".format(result["results_path"]))
             print("中文报告：{0}".format(result["report_path"]))
+            print(
+                "最大位移模：{0:.8g} {1}".format(
+                    result["maximum_displacement"], result["length_unit"]
+                )
+            )
+            print(
+                "最大 Mises 应力：{0:.8g} {1}".format(
+                    result["maximum_mises_stress"], result["stress_unit"]
+                )
+            )
             return 0
     except (ConfigurationError, RuntimeError) as error:
         print("执行失败：{0}".format(error), file=sys.stderr)

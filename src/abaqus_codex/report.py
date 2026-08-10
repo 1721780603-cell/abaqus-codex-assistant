@@ -24,7 +24,26 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
     displacement_location = results["maximum_displacement_location"]
     stress_location = results["maximum_mises_stress_location"]
 
-    return """# 二维矩形板拉伸分析报告
+    model_type = str(model.get("type", "rectangle"))
+    if model_type == "plate_with_hole":
+        report_title = "二维中心圆孔板拉伸分析报告"
+        hole_geometry = "- 圆孔半径：{0} {1}\n".format(
+            _number(model["hole_radius"]), units["length"]
+        )
+        hole_mesh = "- 孔边网格尺寸：{0} {1}\n".format(
+            _number(analysis["hole_mesh_size"]), units["length"]
+        )
+        model_note = (
+            "圆孔附近存在应力集中，最大应力会对孔边网格尺寸较敏感。"
+            "用于论文或工程项目前，应继续进行网格收敛性分析。"
+        )
+    else:
+        report_title = "二维矩形板拉伸分析报告"
+        hole_geometry = ""
+        hole_mesh = ""
+        model_note = ""
+
+    return """# {report_title}
 
 ## 1. 计算概况
 
@@ -39,11 +58,11 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
 - 板长：{length} {length_unit}
 - 板高：{height} {length_unit}
 - 板厚：{thickness} {length_unit}
-- 材料：{material_name}
+{hole_geometry}- 材料：{material_name}
 - 弹性模量：{youngs_modulus} {stress_unit}
 - 泊松比：{poisson_ratio}
-- 网格尺寸：{mesh_size} {length_unit}
-
+- 全局网格尺寸：{mesh_size} {length_unit}
+{hole_mesh}
 ## 3. 边界条件
 
 - 左边界：约束水平方向位移；
@@ -62,8 +81,11 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
 
 本报告读取 ODB 最后一个分析帧，并在全模型范围内搜索位移模和 Mises 应力最大值。Abaqus 不内置单位制，本报告中的单位来自输入配置；使用结果前应核对材料参数、几何尺寸和载荷采用了同一套单位制。
 
+{model_note}
+
 > 本报告由 Abaqus Codex Assistant 自动生成。第一阶段结果仅用于示例与流程验证，实际工程项目仍需由具备相应资质的工程师复核。
 """.format(
+        report_title=report_title,
         job_name=results["job_name"],
         model_name=results["model_name"],
         generated_at=results["generated_at"],
@@ -71,12 +93,14 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
         length=_number(model["length"]),
         height=_number(model["height"]),
         thickness=_number(model["thickness"]),
+        hole_geometry=hole_geometry,
         length_unit=units["length"],
         material_name=material["name"],
         youngs_modulus=_number(material["youngs_modulus"]),
         stress_unit=units["stress"],
         poisson_ratio=_number(material["poisson_ratio"]),
         mesh_size=_number(analysis["mesh_size"]),
+        hole_mesh=hole_mesh,
         prescribed_displacement=_number(analysis["right_edge_displacement"]),
         maximum_displacement=_number(results["maximum_displacement"]),
         u_instance=displacement_location["instance"],
@@ -85,6 +109,7 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
         s_instance=stress_location["instance"],
         s_element=stress_location["element_label"],
         s_point=stress_location["integration_point"],
+        model_note=model_note,
     )
 
 

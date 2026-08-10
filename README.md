@@ -2,7 +2,7 @@
 
 一个面向 Abaqus 初学者的开源项目：先检查本机环境，再用清晰、可追溯的步骤完成建模、求解、ODB 结果读取和中文报告生成。
 
-第一阶段已经实现二维矩形板拉伸的完整闭环，并在 Abaqus 2021 上完成真实验证。
+当前已经实现二维矩形板和中心圆孔板拉伸的完整闭环，并在 Abaqus 2021 上完成真实验证。
 
 > 本项目是非官方社区项目，与 Dassault Systèmes 不存在隶属、授权或赞助关系。
 
@@ -14,6 +14,7 @@
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
 - 选择入门、论文复现、科研、生产或教学场景；
 - 生成二维平面应力矩形板拉伸模型；
+- 生成带孔边局部网格细化的二维中心圆孔板拉伸模型；
 - 自动运行 Abaqus/Standard；
 - 读取 ODB 最后分析帧；
 - 输出全模型最大位移模和最大 Mises 应力；
@@ -54,25 +55,31 @@ py -m venv .venv
 检查环境：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe doctor
+.\.venv\Scripts\python.exe -m abaqus_codex doctor
 ```
 
 如需智能模式，在阅读安全说明后安装或注册 MCP：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe mcp-setup --yes
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-setup --yes
 ```
 
 保存使用场景：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe configure --scenario learning
+.\.venv\Scripts\python.exe -m abaqus_codex configure --scenario learning
 ```
 
 运行二维矩形板拉伸示例：
 
 ```powershell
-.\.venv\Scripts\abaqus-codex.exe run
+.\.venv\Scripts\python.exe -m abaqus_codex run
+```
+
+运行二维中心圆孔板拉伸示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\plate_with_hole_tension.json
 ```
 
 结果保存在 `outputs/<运行时间>/`：
@@ -96,6 +103,14 @@ Abaqus 的 CAE、ODB、状态和日志文件保存在 `work/runs/<运行时间>/
 - `.sta` 状态：`THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
 
 210 MPa 与线弹性理论值 `E × u / L = 210000 × 0.1 / 100` 一致。
+
+圆孔板默认配置采用板长 100 mm、板高 50 mm、中心孔半径 5 mm、全局网格 2 mm、孔边网格 0.5 mm。在同一台 Abaqus 2021 电脑上的真实验证结果为：
+
+- 最大位移模：约 0.10093824 mm；
+- 最大 Mises 应力：约 562.55554 MPa；
+- `.sta` 状态：`THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
+
+圆孔附近存在应力集中，因此最大应力高于无孔板。该数值依赖孔径、板宽和孔边网格，正式使用前必须进行网格收敛性分析，不能把本示例结果直接当作工程许用值。
 
 ## 项目结构
 
@@ -126,7 +141,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 20 项离线测试；
+- GitHub Actions 自动运行语法检查和 28 项离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；

@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 二维中心圆孔板拉伸模型与独立示例配置；
+- 可配置孔半径、全局网格和孔边局部网格；
+- 根据 `model.type` 安全选择内置 Abaqus 脚本；
+- 圆孔板专用中文报告内容和输入校验；
+- 离线测试由 20 项增加到 28 项。
+
+### 已验证
+
+- Windows 11、Abaqus 2021、Abaqus Python 2.7.15；
+- 默认圆孔板最大位移模 0.10093824 mm、最大 Mises 应力 562.55554 MPa；
+- `.sta` 显示 `THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
+
 ### 计划
 
 - 参数化批量分析；
