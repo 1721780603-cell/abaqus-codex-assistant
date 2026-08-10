@@ -13,6 +13,119 @@ def _number(value: object) -> str:
     return "{0:.8g}".format(float(value))
 
 
+def _build_moving_load_report(results: Mapping[str, object]) -> str:
+    """生成三维路面移动轮载专用报告，避免沿用二维静力描述。"""
+
+    config = results["config"]
+    model = config["model"]
+    material = config["material"]
+    analysis = config["analysis"]
+    units = config["units"]
+    displacement_location = results["maximum_displacement_location"]
+    vertical_location = results["maximum_vertical_displacement_location"]
+    stress_location = results["maximum_mises_stress_location"]
+    speed_kmh = float(analysis["load_speed"]) * 3.6 / 1000.0
+
+    return """# 三维路面单轮移动载荷教学分析报告
+
+## 1. 计算概况
+
+- 作业名称：`{job_name}`
+- 模型名称：`{model_name}`
+- 计算状态：已完成
+- 结果生成时间：{generated_at}
+- Abaqus Python：{abaqus_python_version}
+- 用户子程序：`{user_subroutine}`
+- 动力结果帧数：{frame_count}
+
+## 2. 模型与材料
+
+- 路面长度：{length} {length_unit}
+- 路面宽度：{width} {length_unit}
+- 路面深度：{depth} {length_unit}
+- 材料：{material_name}
+- 弹性模量：{youngs_modulus} {stress_unit}
+- 泊松比：{poisson_ratio}
+- 密度：{density} {mass_unit}/{length_unit}³
+- 全局网格尺寸：{mesh_size} {length_unit}
+
+## 3. 移动载荷与边界条件
+
+- 接触压力：{load_pressure} {stress_unit}
+- 接触区：{load_length} × {load_width} {length_unit}
+- 移动速度：{load_speed} {length_unit}/{time_unit}（约 {speed_kmh} km/h）
+- 横向中心坐标：{load_center_y} {length_unit}
+- 载荷中心起点：{load_start_x} {length_unit}
+- 分析时长：{time_period} {time_unit}
+- 最大时间增量：{max_time_increment} {time_unit}
+- 路面底面：约束三个方向的位移；
+- 路面侧面：自由；
+- 分析类型：三维线弹性、动力隐式分析。
+
+## 4. 主要结果
+
+- **全程最大位移模：{maximum_displacement} {length_unit}**
+  - 时间：{u_time} {time_unit}；实例 `{u_instance}`，节点 {u_node}
+- **全程最大竖向位移绝对值：{maximum_vertical_displacement} {length_unit}**
+  - 带符号 U3：{vertical_signed_value} {length_unit}
+  - 时间：{vertical_time} {time_unit}；实例 `{vertical_instance}`，节点 {vertical_node}
+- **全程最大 Mises 应力：{maximum_mises_stress} {stress_unit}**
+  - 时间：{s_time} {time_unit}；实例 `{s_instance}`，单元 {s_element}，积分点 {s_point}
+
+## 5. 结果说明
+
+本报告遍历动力分析的全部输出帧，而不是只读取最后一帧。DLOAD 根据时间和顶面积分点坐标移动矩形压力区。
+
+本算例仅用于验证 Fortran 子程序、移动载荷和结果读取流程。单层线弹性材料、固定底面和教学轮载参数不能直接代表三级公路正式设计；工程使用前还需要依据项目标准确定路面结构层、轴载、轮胎接地、速度、不平度、边界距离、阻尼和材料模型。
+
+> 本报告由 Abaqus Codex Assistant 自动生成。实际工程项目仍需由具备相应资质的工程师复核。
+""".format(
+        job_name=results["job_name"],
+        model_name=results["model_name"],
+        generated_at=results["generated_at"],
+        abaqus_python_version=results["abaqus_python_version"],
+        user_subroutine=results["user_subroutine"],
+        frame_count=results["frame_count"],
+        length=_number(model["length"]),
+        width=_number(model["width"]),
+        depth=_number(model["depth"]),
+        length_unit=units["length"],
+        material_name=material["name"],
+        youngs_modulus=_number(material["youngs_modulus"]),
+        stress_unit=units["stress"],
+        poisson_ratio=_number(material["poisson_ratio"]),
+        density=_number(material["density"]),
+        mass_unit=units["mass"],
+        mesh_size=_number(analysis["mesh_size"]),
+        load_pressure=_number(analysis["load_pressure"]),
+        load_length=_number(analysis["load_length"]),
+        load_width=_number(analysis["load_width"]),
+        load_speed=_number(analysis["load_speed"]),
+        time_unit=units["time"],
+        speed_kmh=_number(speed_kmh),
+        load_center_y=_number(analysis["load_center_y"]),
+        load_start_x=_number(analysis["load_start_x"]),
+        time_period=_number(analysis["time_period"]),
+        max_time_increment=_number(analysis["max_time_increment"]),
+        maximum_displacement=_number(results["maximum_displacement"]),
+        u_time=_number(displacement_location["frame_time"]),
+        u_instance=displacement_location["instance"],
+        u_node=displacement_location["node_label"],
+        maximum_vertical_displacement=_number(
+            results["maximum_vertical_displacement"]
+        ),
+        vertical_signed_value=_number(vertical_location["signed_value"]),
+        vertical_time=_number(vertical_location["frame_time"]),
+        vertical_instance=vertical_location["instance"],
+        vertical_node=vertical_location["node_label"],
+        maximum_mises_stress=_number(results["maximum_mises_stress"]),
+        s_time=_number(stress_location["frame_time"]),
+        s_instance=stress_location["instance"],
+        s_element=stress_location["element_label"],
+        s_point=stress_location["integration_point"],
+    )
+
+
 def _model_specific_text(
     model_type: str,
     model: Mapping[str, object],
@@ -98,6 +211,8 @@ def build_chinese_report(results: Mapping[str, object]) -> str:
     stress_location = results["maximum_mises_stress_location"]
 
     model_type = str(model.get("type", "rectangle"))
+    if model_type == "moving_load_road":
+        return _build_moving_load_report(results)
     report_title, extra_parameters, boundary_conditions, model_note = (
         _model_specific_text(model_type, model, analysis, units)
     )

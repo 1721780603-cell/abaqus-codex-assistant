@@ -71,6 +71,14 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\biaxial_tension.json
 ```
 
+运行三维路面单轮移动载荷：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\moving_load_road.json
+```
+
+移动载荷示例还要求 Abaqus 能调用 Visual Studio 和 Intel Fortran Classic。它会在本次 `work/runs/<运行时间>/` 中生成并编译 `moving_pressure_dload.for`。
+
 程序会显示结果 JSON 和中文报告的绝对路径。计算失败时先查看 `work/runs/<运行时间>/abaqus_console.log`、`.sta`、`.msg` 和 `abaqus.rpy`。
 
 ## 6. 修改参数
@@ -82,11 +90,12 @@ py -m venv .venv
 - 单向拉伸的右边位移；
 - 悬臂梁的上边界均布载荷；
 - 双向拉伸的右边和上边位移；
+- 移动轮载的压力、速度、接触区、横向位置和最大时间增量；
 - 网格尺寸；
 - 圆孔板的孔半径和孔边局部网格尺寸；
 - CPU 数量；
 - 长度和应力单位标签。
 
-`model.type` 可使用 `rectangle`、`plate_with_hole`、`cantilever_bending` 或 `biaxial_tension`。圆孔板还会检查孔直径小于板长和板高，并要求孔边网格不比全局网格更粗；悬臂梁载荷和双向拉伸的两个位移必须大于零。Abaqus 不自动换算单位，所有输入必须使用一致单位制。
+`model.type` 可使用 `rectangle`、`plate_with_hole`、`cantilever_bending`、`biaxial_tension` 或 `moving_load_road`。圆孔板还会检查孔直径小于板长和板高，并要求孔边网格不比全局网格更粗；悬臂梁载荷和双向拉伸的两个位移必须大于零；移动载荷会检查接触区没有越界，且时间增量足够描述移动过程。Abaqus 不自动换算单位，所有输入必须使用一致单位制。
 
-建议按矩形板、圆孔板、悬臂梁、双向拉伸的顺序学习。每次只修改一个参数，并先预测结果变大还是变小，再运行 Abaqus 核对。
+建议按矩形板、圆孔板、悬臂梁、双向拉伸、移动载荷的顺序学习。每次只修改一个参数，并先预测结果变大还是变小，再运行 Abaqus 核对。

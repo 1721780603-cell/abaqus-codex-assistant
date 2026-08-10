@@ -2,7 +2,7 @@
 
 一个面向 Abaqus 初学者的开源项目：先检查本机环境，再用清晰、可追溯的步骤完成建模、求解、ODB 结果读取和中文报告生成。
 
-当前已经实现四个由浅入深的二维模型：矩形板拉伸、中心圆孔板拉伸、悬臂梁均布载荷弯曲和方板双向拉伸，并在 Abaqus 2021 上完成真实验证。
+当前已经实现五个由浅入深的模型：矩形板拉伸、中心圆孔板拉伸、悬臂梁均布载荷弯曲、方板双向拉伸，以及使用 Fortran DLOAD 的三维路面单轮移动载荷，并在 Abaqus 2021 上完成真实验证。
 
 > 本项目是非官方社区项目，与 Dassault Systèmes 不存在隶属、授权或赞助关系。
 
@@ -17,6 +17,7 @@
 - 生成带孔边局部网格细化的二维中心圆孔板拉伸模型；
 - 生成左端固定、上边界承受向下均布载荷的二维悬臂梁模型；
 - 生成水平和竖直方向同时受控位移的二维方板双向拉伸模型；
+- 生成三维单层路面，并用 Fortran DLOAD 控制矩形轮载区匀速移动；
 - 自动运行 Abaqus/Standard；
 - 读取 ODB 最后分析帧；
 - 输出全模型最大位移模和最大 Mises 应力；
@@ -40,6 +41,7 @@
 - Git；
 - 与 Abaqus 大版本匹配的 `abqpy`，例如 Abaqus 2021 使用 `abqpy==2021.*`；
 - Codex 和 Abaqus MCP 仅为智能模式所需。
+- 三维移动载荷示例还需要与 Abaqus 匹配的 Visual Studio 和 Intel Fortran Classic。
 
 项目不分发 Abaqus，也不绕过许可证。
 
@@ -96,6 +98,14 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\biaxial_tension.json
 ```
 
+运行三维路面单轮移动载荷示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\moving_load_road.json
+```
+
+移动载荷会编译项目生成的 Fortran DLOAD。首次使用前请阅读[移动载荷入门说明](docs/moving-load-dload.md)。
+
 结果保存在 `outputs/<运行时间>/`：
 
 - `input_config.json`：本次实际使用的参数；
@@ -142,12 +152,22 @@ Abaqus 的 CAE、ODB、状态和日志文件保存在 `work/runs/<运行时间>/
 
 最大位移与理论值 `√(0.1² + 0.1²)` 一致；等双向平面应力的理论 Mises 应力为 `E × 0.001 / (1 - ν) = 300 MPa`。
 
+三维移动载荷默认配置采用单层 `4000 × 2000 × 600 mm` 弹性路面、`200 × 200 mm` 矩形接触区、`0.7 MPa` 接触压力和 `36 km/h` 速度。Abaqus 2021 真实编译 DLOAD 并完成 211 个动力输出帧，结果为：
+
+- 全程最大位移模：约 0.18379377 mm；
+- 全程最大竖向位移绝对值：约 0.18264329 mm；
+- 全程最大 Mises 应力：约 0.47442088 MPa；
+- `.sta` 状态：`THE ANALYSIS HAS COMPLETED SUCCESSFULLY`。
+
+最大响应接近模型入口和出口，反映了有限路面端部效应。本示例只验证子程序和流程，不能作为三级公路正式设计结果。
+
 ## 推荐入门顺序
 
 1. 矩形板单向拉伸：学习材料、位移边界、网格和理论值核对；
 2. 中心圆孔板拉伸：观察应力集中和局部网格敏感性；
 3. 悬臂梁均布载荷弯曲：学习固定端、分布载荷和弯曲变形；
 4. 方板双向拉伸：学习两个方向的边界条件和双向应力状态。
+5. 三维路面移动载荷：学习密度、动力时间、Fortran DLOAD 和全时间帧极值。
 
 ## 项目结构
 
@@ -178,7 +198,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 36 项离线测试；
+- GitHub Actions 自动运行语法检查和 44 项离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；
@@ -196,6 +216,7 @@ Abaqus MCP 可以执行 Abaqus Python 脚本，属于高权限本地能力。不
 - [首次启动流程](docs/first-run-flow.md)
 - [项目架构](docs/architecture.md)
 - [版本支持表](docs/version-support.md)
+- [移动载荷与 DLOAD 入门](docs/moving-load-dload.md)
 - [日常维护方式](docs/maintenance.md)
 - [GitHub 仓库设置](docs/github-settings.md)
 - [论文复现边界](docs/paper-reproduction-boundaries.md)

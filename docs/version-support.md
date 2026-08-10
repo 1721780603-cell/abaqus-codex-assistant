@@ -4,9 +4,11 @@
 
 | 环境 | 状态 | 说明 |
 |---|---|---|
-| Windows 11 + Abaqus 2021 | 已验证 | 矩形板、中心圆孔板、悬臂梁和双向拉伸示例完整通过 |
+| Windows 11 + Abaqus 2021 | 已验证 | 五个内置模型完整通过，包括 DLOAD 动力示例 |
 | Abaqus Python 2.7.15 | 已验证 | Abaqus 2021 自带环境 |
 | abqpy 2021.7.3 | 已验证 | 与 Abaqus 2021 大版本匹配 |
+| Visual Studio 2019 16.4.27 | 已验证 | 提供 Abaqus 用户子程序所需 MSVC 工具链 |
+| Intel Fortran 19.1.3.311 | 已验证 | DLOAD 编译、链接和 Standard 求解通过 |
 | Python 3.10 | CI 测试 | 主程序最低支持版本 |
 | Python 3.13 | 本机与 CI 测试 | 主程序开发环境 |
 | Windows 10 | 社区测试 | 尚未完成维护者真实验证 |

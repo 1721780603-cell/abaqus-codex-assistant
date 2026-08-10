@@ -10,6 +10,7 @@
 ## 发布前检查
 
 - [ ] 更新 `CHANGELOG.md`、版本支持表和 README；
+- [ ] 涉及用户子程序时，记录 Fortran、Visual Studio 版本及编译/链接成功日志；
 - [ ] 运行全部离线测试；
 - [ ] 构建 wheel 并确认包含 Abaqus 脚本；
 - [ ] 在声明支持的 Abaqus 版本上运行真实示例；
