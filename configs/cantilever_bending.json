@@ -1,7 +1,7 @@
 {
   "model": {
-    "type": "rectangle",
-    "name": "RectanglePlate2D",
+    "type": "cantilever_bending",
+    "name": "CantileverBeam2D",
     "length": 100.0,
     "height": 20.0,
     "thickness": 1.0
@@ -12,9 +12,9 @@
     "poisson_ratio": 0.3
   },
   "analysis": {
-    "step_name": "TensionStep",
-    "job_name": "rectangle_tension_2d",
-    "right_edge_displacement": 0.1,
+    "step_name": "BendingStep",
+    "job_name": "cantilever_bending_2d",
+    "top_edge_pressure": 1.0,
     "mesh_size": 2.0,
     "num_cpus": 1
   },

@@ -1,9 +1,9 @@
 {
   "model": {
-    "type": "rectangle",
-    "name": "RectanglePlate2D",
+    "type": "biaxial_tension",
+    "name": "BiaxialPlate2D",
     "length": 100.0,
-    "height": 20.0,
+    "height": 100.0,
     "thickness": 1.0
   },
   "material": {
@@ -12,10 +12,11 @@
     "poisson_ratio": 0.3
   },
   "analysis": {
-    "step_name": "TensionStep",
-    "job_name": "rectangle_tension_2d",
+    "step_name": "BiaxialStep",
+    "job_name": "biaxial_tension_2d",
     "right_edge_displacement": 0.1,
-    "mesh_size": 2.0,
+    "top_edge_displacement": 0.1,
+    "mesh_size": 5.0,
     "num_cpus": 1
   },
   "units": {
