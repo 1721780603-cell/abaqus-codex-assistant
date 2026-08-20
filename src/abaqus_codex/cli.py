@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
 from abaqus_codex.configuration import ConfigurationError
 from abaqus_codex.doctor import main as doctor_main
+from abaqus_codex.local_ai import LocalAIError, SUPPORTED_PROVIDERS
 from abaqus_codex.scenario import SCENARIOS, prompt_scenario, save_profile
 
 
@@ -62,6 +64,51 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=root / "configs" / "user_profile.json",
         help="场景配置保存位置。",
+    )
+
+    local_ai_parser = subparsers.add_parser(
+        "local-ai", help="使用本机 Ollama 或 LM Studio 生成受约束的模型配置。"
+    )
+    local_ai_subparsers = local_ai_parser.add_subparsers(
+        dest="local_ai_command", required=True
+    )
+    local_ai_doctor = local_ai_subparsers.add_parser(
+        "doctor", help="检查本机模型服务并列出可用模型。"
+    )
+    local_ai_doctor.add_argument(
+        "--provider",
+        choices=SUPPORTED_PROVIDERS,
+        help="不提供时依次检查 Ollama 和 LM Studio。",
+    )
+    local_ai_doctor.add_argument(
+        "--base-url",
+        help="仅在指定 provider 时使用；只允许本机回环 HTTP 地址。",
+    )
+
+    local_ai_generate = local_ai_subparsers.add_parser(
+        "generate", help="把中文需求转换为矩形板 JSON 配置。"
+    )
+    local_ai_generate.add_argument(
+        "--provider", choices=SUPPORTED_PROVIDERS, required=True
+    )
+    local_ai_generate.add_argument("--model", required=True, help="本机模型名称。")
+    local_ai_generate.add_argument(
+        "--prompt", required=True, help="只描述二维矩形板拉伸参数。"
+    )
+    local_ai_generate.add_argument(
+        "--base-url", help="只允许本机回环 HTTP 地址。"
+    )
+    local_ai_generate.add_argument(
+        "--output",
+        type=Path,
+        default=root / "configs" / "local_ai_rectangle.json",
+        help="确认后保存的 JSON 路径。",
+    )
+    local_ai_generate.add_argument(
+        "--timeout", type=int, default=120, help="本地模型响应超时秒数。"
+    )
+    local_ai_generate.add_argument(
+        "--yes", action="store_true", help="跳过交互确认，只保存经过校验的 JSON。"
     )
 
     run_parser = subparsers.add_parser(
@@ -117,6 +164,58 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("当前场景：{0}".format(profile["scenario_name"]))
             return 0
 
+        if args.command == "local-ai":
+            # 延后导入，普通建模流程不会加载或连接本地模型服务。
+            from abaqus_codex.local_ai import (
+                DEFAULT_BASE_URLS,
+                generate_rectangle_config,
+                list_models,
+                save_generated_config,
+            )
+
+            if args.local_ai_command == "doctor":
+                if args.base_url and not args.provider:
+                    raise LocalAIError("使用 --base-url 时必须同时指定 --provider。")
+                providers = (args.provider,) if args.provider else SUPPORTED_PROVIDERS
+                available = False
+                for provider in providers:
+                    try:
+                        models = list_models(provider, args.base_url)
+                        available = True
+                        print("{0}：已连接 {1}".format(provider, args.base_url or DEFAULT_BASE_URLS[provider]))
+                        print("  可用模型：{0}".format("、".join(models) or "无"))
+                    except LocalAIError as error:
+                        print("{0}：不可用（{1}）".format(provider, error))
+                return 0 if available else 1
+
+            config, defaulted_fields = generate_rectangle_config(
+                provider=args.provider,
+                model=args.model,
+                prompt=args.prompt,
+                base_url=args.base_url,
+                timeout_seconds=args.timeout,
+            )
+            print("本地 AI 生成并通过校验的矩形板配置：")
+            print(json.dumps(config, ensure_ascii=False, indent=2))
+            if defaulted_fields:
+                print(
+                    "以下参数未在需求中明确给出，沿用教学默认值：{0}".format(
+                        "、".join(defaulted_fields)
+                    )
+                )
+            confirmed = args.yes
+            if not confirmed:
+                answer = input("确认保存该配置吗？输入 y 保存，其他输入取消：").strip()
+                confirmed = answer.lower() in ("y", "yes")
+            if not confirmed:
+                print("已取消，配置未保存，也没有运行 Abaqus。")
+                return 0
+            output_path = args.output.resolve()
+            save_generated_config(output_path, config)
+            print("配置已保存：{0}".format(output_path))
+            print("本命令不会自动运行 Abaqus；请先人工检查 JSON。")
+            return 0
+
         if args.command == "run":
             # 延后导入，保证仅使用 doctor/configure 时不加载求解流程。
             from abaqus_codex.workflow import run_analysis
@@ -141,7 +240,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
             )
             return 0
-    except (ConfigurationError, RuntimeError) as error:
+    except (ConfigurationError, LocalAIError, RuntimeError) as error:
         print("执行失败：{0}".format(error), file=sys.stderr)
         return 1
 

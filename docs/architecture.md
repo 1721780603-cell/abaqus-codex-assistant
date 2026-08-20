@@ -3,7 +3,13 @@
 ## 主流程
 
 ```text
-JSON 配置
+中文需求（可选）
+   │
+   ▼
+本机 Ollama/LM Studio 提取白名单参数
+   │
+   ▼
+人工确认后的 JSON 配置
    │
    ▼
 Python 3 参数校验
@@ -32,6 +38,7 @@ Python 3 生成中文 report.md
 - `mcp_setup.py`：经明确确认后的固定版本安装；
 - `doctor.py`：综合体检；
 - `configuration.py`：输入校验；
+- `local_ai.py`：只通过本机回环地址读取模型并生成受约束的矩形板参数；
 - `scenario.py`：最小化场景配置；
 - `workflow.py`：创建独立运行目录并协调全流程；
 - `abaqus_scripts/rectangle_tension.py`：Abaqus 2021/Python 2.7 端逻辑；
@@ -51,3 +58,7 @@ Abaqus 2021 自带 Python 2.7，现代开发工具通常使用 Python 3。主程
 ## 结果可追溯性
 
 每次运行创建唯一时间戳目录。公开输出中保存校验后的配置、结构化结果和报告；大型 ODB、CAE、SIM 及日志保存在 `work`，默认被 Git 忽略。
+
+## 本地 AI 安全边界
+
+本地模型只负责把自然语言转换为固定白名单字段。程序拒绝外部或局域网模型地址、额外字段、脚本路径和不支持的单位；生成结果还要经过 `configuration.py` 的同一套校验。生成配置与运行 Abaqus 是两个独立命令，避免一次模型响应直接触发高权限求解流程。
