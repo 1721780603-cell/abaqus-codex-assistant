@@ -13,6 +13,7 @@
 - 检测 Abaqus MCP 文件、Codex 注册和本地启动状态；
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
 - 选择入门、论文复现、科研、生产或教学场景；
+- 检测本机 Ollama 或 LM Studio，并把中文需求转换为受约束的矩形板 JSON；
 - 生成二维平面应力矩形板拉伸模型；
 - 生成带孔边局部网格细化的二维中心圆孔板拉伸模型；
 - 生成左端固定、上边界承受向下均布载荷的二维悬臂梁模型；
@@ -24,14 +25,15 @@
 - 生成 UTF-8 中文 Markdown 报告；
 - 每次运行使用独立目录，不覆盖历史计算。
 
-## 两种运行模式
+## 三种运行模式
 
 | 模式 | 包含功能 | 是否需要 Codex 用量 |
 |---|---|---:|
 | 本地基础模式 | 环境检测、固定模型、求解、ODB 读取、模板报告 | 否 |
+| 本地 AI 模式 | Ollama/LM Studio 中文需求转矩形板 JSON，人工确认后保存 | 否 |
 | Codex 智能模式 | 自然语言辅助、脚本修改、错误分析、后续论文复现 | 是 |
 
-项目不会内置或共享公共 API Key。智能模式应由每个用户使用自己的 Codex 登录或 API Key。
+项目不会内置或共享公共 API Key。本地 AI 模式只允许连接当前电脑的回环地址；Codex 智能模式应由每个用户使用自己的 Codex 登录或 API Key。
 
 ## 运行要求
 
@@ -73,6 +75,23 @@ py -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe -m abaqus_codex configure --scenario learning
 ```
+
+检查本地 AI（可选）：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex local-ai doctor
+```
+
+用 Ollama 生成一份矩形板配置；程序会先显示完整 JSON，确认后才保存：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex local-ai generate `
+  --provider ollama `
+  --model "你的本机模型名称" `
+  --prompt "建立长 200 mm、高 100 mm、厚 2 mm 的矩形板，右边拉伸 0.2 mm。"
+```
+
+这个命令不会运行 Abaqus。第一版只支持矩形板、mm 和 MPa，详细边界见[本地 AI 入门](docs/local-ai.md)。
 
 运行二维矩形板拉伸示例：
 
@@ -198,7 +217,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 44 项离线测试；
+- GitHub Actions 自动运行语法检查和 57 项离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；
@@ -217,6 +236,7 @@ Abaqus MCP 可以执行 Abaqus Python 脚本，属于高权限本地能力。不
 - [项目架构](docs/architecture.md)
 - [版本支持表](docs/version-support.md)
 - [移动载荷与 DLOAD 入门](docs/moving-load-dload.md)
+- [本地 AI 入门](docs/local-ai.md)
 - [日常维护方式](docs/maintenance.md)
 - [GitHub 仓库设置](docs/github-settings.md)
 - [论文复现边界](docs/paper-reproduction-boundaries.md)

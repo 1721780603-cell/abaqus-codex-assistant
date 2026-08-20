@@ -45,7 +45,32 @@ py -m venv .venv
 
 可用值：`learning`、`paper`、`research`、`production`、`teaching`。
 
-## 5. 运行示例
+## 5. 使用本地 AI 生成配置（可选）
+
+先启动 Ollama 或 LM Studio 的本机服务，再检查连接：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex local-ai doctor
+```
+
+Ollama 示例：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex local-ai generate `
+  --provider ollama `
+  --model "你的本机模型名称" `
+  --prompt "建立长 200 mm、高 100 mm、厚 2 mm 的矩形板，右边拉伸 0.2 mm。"
+```
+
+程序会显示通过校验的完整 JSON，并列出哪些参数沿用了教学默认值。输入 `y` 后只保存 `configs/local_ai_rectangle.json`，不会自动运行 Abaqus。人工检查配置后，可单独运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\local_ai_rectangle.json
+```
+
+第一版只支持二维矩形板单向拉伸、mm 和 MPa。其他模型或单位应停止并提示，不应由 AI 猜测。完整说明见[本地 AI 入门](local-ai.md)。
+
+## 6. 运行示例
 
 运行矩形板：
 
@@ -81,7 +106,7 @@ py -m venv .venv
 
 程序会显示结果 JSON 和中文报告的绝对路径。计算失败时先查看 `work/runs/<运行时间>/abaqus_console.log`、`.sta`、`.msg` 和 `abaqus.rpy`。
 
-## 6. 修改参数
+## 7. 修改参数
 
 复制相应 JSON 示例后，可以修改：
 
