@@ -56,6 +56,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="将已有 Abaqus MCP 注册替换为防卡启动器；必须同时使用 --yes。",
     )
 
+    headless_parser = subparsers.add_parser(
+        "mcp-headless", help="在隐藏的 Abaqus noGUI 进程中运行 MCP 桥接。"
+    )
+    headless_subparsers = headless_parser.add_subparsers(
+        dest="headless_command", required=True
+    )
+    headless_start = headless_subparsers.add_parser(
+        "start", help="启动无界面后台桥接。"
+    )
+    headless_start.add_argument(
+        "--timeout", type=int, default=60, help="等待插件心跳的秒数。"
+    )
+    headless_stop = headless_subparsers.add_parser(
+        "stop", help="优雅停止无界面后台桥接。"
+    )
+    headless_stop.add_argument(
+        "--timeout", type=int, default=20, help="等待后台进程退出的秒数。"
+    )
+    headless_subparsers.add_parser("status", help="查看无界面后台桥接状态。")
+
     configure_parser = subparsers.add_parser(
         "configure", help="选择使用场景并保存本地配置。"
     )
@@ -161,6 +181,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             from abaqus_codex.mcp_setup import main as mcp_setup_main
 
             return mcp_setup_main(confirmed=args.yes, repair=args.repair)
+
+        if args.command == "mcp-headless":
+            from abaqus_codex.mcp_headless import (
+                inspect_headless_bridge,
+                print_headless_status,
+                start_headless_bridge,
+                stop_headless_bridge,
+            )
+
+            if args.headless_command == "start":
+                result = start_headless_bridge(timeout_seconds=args.timeout)
+            elif args.headless_command == "stop":
+                result = stop_headless_bridge(timeout_seconds=args.timeout)
+            else:
+                result = inspect_headless_bridge()
+            print_headless_status(result)
+            return 0 if result["running"] or args.headless_command == "stop" else 1
 
         if args.command == "configure":
             scenario = args.scenario or prompt_scenario()

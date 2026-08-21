@@ -36,6 +36,7 @@ Python 3 生成中文 report.md
 - `abqpy_environment.py`：abqpy 版本匹配；
 - `mcp_environment.py`：MCP 文件、Codex 注册、导入验证和 Abaqus 插件心跳检查；
 - `mcp_guard.py`：工具调用前检查心跳与进程，桥接离线时快速返回；
+- `mcp_headless.py`：隐藏启动、检查和优雅停止独立 Abaqus noGUI 桥接；
 - `mcp_setup.py`：经明确确认后的固定版本安装和防卡注册修复；
 - `doctor.py`：综合体检；
 - `configuration.py`：输入校验；

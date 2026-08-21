@@ -8,6 +8,7 @@ import math
 import os
 import sys
 import time
+import ctypes
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
@@ -22,6 +23,8 @@ def process_is_running(pid: int) -> bool:
 
     if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
         return False
+    if os.name == "nt":
+        return _windows_process_is_running(pid)
     try:
         # 信号 0 只检查进程，不会结束 Abaqus。
         os.kill(pid, 0)
@@ -33,6 +36,28 @@ def process_is_running(pid: int) -> bool:
     except OSError:
         return False
     return True
+
+
+def _windows_process_is_running(pid: int) -> bool:
+    """在 Windows 上用只读进程句柄检查 PID，避免 os.kill 的兼容异常。"""
+
+    process_query_limited_information = 0x1000
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        open_process.restype = ctypes.c_void_p
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_int
+        handle = open_process(process_query_limited_information, 0, pid)
+        if handle:
+            close_handle(handle)
+            return True
+        # ERROR_ACCESS_DENIED 表示进程存在，只是当前权限不能打开。
+        return ctypes.get_last_error() == 5
+    except (AttributeError, OSError, SystemError, ValueError):
+        return False
 
 
 def inspect_bridge_status(
