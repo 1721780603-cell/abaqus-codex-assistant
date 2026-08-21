@@ -50,6 +50,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="确认下载代码并修改用户级 MCP/插件配置。",
     )
+    mcp_parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="将已有 Abaqus MCP 注册替换为防卡启动器；必须同时使用 --yes。",
+    )
 
     configure_parser = subparsers.add_parser(
         "configure", help="选择使用场景并保存本地配置。"
@@ -155,7 +160,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "mcp-setup":
             from abaqus_codex.mcp_setup import main as mcp_setup_main
 
-            return mcp_setup_main(confirmed=args.yes)
+            return mcp_setup_main(confirmed=args.yes, repair=args.repair)
 
         if args.command == "configure":
             scenario = args.scenario or prompt_scenario()

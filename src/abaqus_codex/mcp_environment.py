@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from abaqus_codex.mcp_guard import inspect_bridge_status
+
 
 def vendor_python_paths(vendor_path: Path) -> List[Path]:
     """返回独立 vendor 及 pywin32 需要显式加入的子目录。"""
@@ -109,6 +111,12 @@ def default_mcp_entry() -> Path:
     return Path.home() / ".abaqus-mcp" / "mcp_server.py"
 
 
+def default_mcp_guard() -> Path:
+    """返回项目管理的 MCP 防卡启动器默认路径。"""
+
+    return Path.home() / ".abaqus-mcp" / "mcp_guard.py"
+
+
 def verify_local_mcp_import(
     entry_file: Path, timeout_seconds: int = 15
 ) -> Tuple[bool, Optional[str], str]:
@@ -193,6 +201,8 @@ def inspect_abaqus_mcp() -> Dict[str, object]:
     codex_cli, list_output = query_codex_mcp_list()
     registered_names = parse_abaqus_mcp_names(list_output) if codex_cli else []
     entry_file = default_mcp_entry()
+    guard_file = default_mcp_guard()
+    status_file = entry_file.parent / "status.json"
     files_installed = entry_file.is_file()
 
     if files_installed:
@@ -204,9 +214,13 @@ def inspect_abaqus_mcp() -> Dict[str, object]:
 
     registered = bool(registered_names)
     usable = registered and launchable
+    bridge = inspect_bridge_status(status_file)
+    responsive = bool(bridge["responsive"])
 
-    if usable:
-        message = "Abaqus MCP 已注册，并通过本地启动验证。"
+    if usable and responsive:
+        message = "Abaqus MCP 已注册，服务器和 Abaqus 插件均响应正常。"
+    elif usable:
+        message = "Abaqus MCP 已配置，但 Abaqus/CAE 插件当前没有响应。"
     elif files_installed and not registered:
         message = "Abaqus MCP 文件存在，但尚未注册到 Codex。"
     elif registered and not launchable:
@@ -219,11 +233,15 @@ def inspect_abaqus_mcp() -> Dict[str, object]:
         "codex_cli": str(codex_cli) if codex_cli else None,
         "files_installed": files_installed,
         "entry_file": str(entry_file),
+        "guard_file": str(guard_file),
+        "guard_installed": guard_file.is_file(),
         "registered": registered,
         "registered_names": registered_names,
         "launchable": launchable,
         "server_name": server_name,
         "launch_message": launch_message,
+        "responsive": responsive,
+        "bridge_status": bridge,
         "message": message,
     }
 
@@ -240,6 +258,9 @@ def main() -> int:
     print("Codex 注册：{0}".format("已注册" if result["registered"] else "未注册"))
     print("启动验证：{0}".format("通过" if result["launchable"] else "未通过"))
     print("启动说明：{0}".format(result["launch_message"]))
+    print("防卡启动器：{0}".format("已安装" if result["guard_installed"] else "未安装"))
+    print("Abaqus 桥接：{0}".format("在线" if result["responsive"] else "离线"))
+    print("桥接说明：{0}".format(result["bridge_status"]["message"]))
 
     if result["codex_cli"]:
         print("Codex CLI：{0}".format(result["codex_cli"]))

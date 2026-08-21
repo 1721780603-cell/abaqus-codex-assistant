@@ -16,11 +16,13 @@ from abaqus_codex.mcp_environment import (
     query_codex_mcp_list,
     vendor_python_paths,
 )
+from abaqus_codex.mcp_guard import MANAGED_GUARD_MARKER
 
 
 MCP_REPOSITORY = "https://github.com/Cai-aa/abaqus-mcp.git"
 MCP_COMMIT = "48aa612ad37bfdc1a7af96181edc749273cc6987"
 MCP_PYTHON_PACKAGE = "mcp==1.28.1"
+MCP_SERVER_NAME = "abaqus-mcp-server"
 
 
 class McpSetupError(RuntimeError):
@@ -130,25 +132,34 @@ def _ensure_abaqus_plugin(target: Path) -> List[str]:
     return messages
 
 
-def _ensure_codex_registration(target: Path) -> str:
-    """把本地 MCP 注册到 Codex；已注册时不修改配置。"""
+def _ensure_guard_launcher(target: Path) -> str:
+    """安装项目管理的防卡启动器；不覆盖用户自己编写的同名文件。"""
 
-    codex_cli, output = query_codex_mcp_list()
-    if codex_cli is None:
-        raise McpSetupError("没有找到可用的 Codex CLI，无法注册 MCP。")
-    if parse_abaqus_mcp_names(output):
-        return "Codex 中已存在 Abaqus MCP 注册，未重复修改。"
+    source = Path(__file__).with_name("mcp_guard.py")
+    destination = target / "mcp_guard.py"
+    source_text = source.read_text(encoding="utf-8")
+    if destination.is_file():
+        existing_text = destination.read_text(encoding="utf-8", errors="replace")
+        if MANAGED_GUARD_MARKER not in existing_text:
+            raise McpSetupError(
+                "发现非本项目管理的 mcp_guard.py，未覆盖：{0}".format(destination)
+            )
+        if existing_text == source_text:
+            return "MCP 防卡启动器已是最新版本。"
+    destination.write_text(source_text, encoding="utf-8")
+    return "已安装 MCP 防卡启动器。"
+
+
+def _registration_command(codex_cli: Path, target: Path, entry: Path) -> List[str]:
+    """构造参数列表，不使用 shell 拼接命令。"""
 
     vendor = target / "vendor"
-    entry = target / "mcp_server.py"
-    python_path = os.pathsep.join(
-        str(path) for path in vendor_python_paths(vendor)
-    )
-    command = [
+    python_path = os.pathsep.join(str(path) for path in vendor_python_paths(vendor))
+    return [
         str(codex_cli),
         "mcp",
         "add",
-        "abaqus-mcp-server",
+        MCP_SERVER_NAME,
         "--env",
         "ABAQUS_MCP_HOME={0}".format(target),
         "--env",
@@ -157,11 +168,46 @@ def _ensure_codex_registration(target: Path) -> str:
         sys.executable,
         str(entry),
     ]
-    _run_command(command)
-    return "已将 Abaqus MCP 注册到 Codex。"
 
 
-def setup_mcp(confirmed: bool, target: Optional[Path] = None) -> Dict[str, object]:
+def _ensure_codex_registration(target: Path, repair: bool = False) -> str:
+    """注册防卡启动器；已有注册只有明确 repair 时才替换。"""
+
+    codex_cli, output = query_codex_mcp_list()
+    if codex_cli is None:
+        raise McpSetupError("没有找到可用的 Codex CLI，无法注册 MCP。")
+    registered_names = parse_abaqus_mcp_names(output)
+    if registered_names and not repair:
+        return "Codex 中已有 MCP 注册；未替换。需要防卡修复时增加 --repair。"
+
+    guard_entry = target / "mcp_guard.py"
+    if MCP_SERVER_NAME in registered_names:
+        _run_command([str(codex_cli), "mcp", "remove", MCP_SERVER_NAME])
+    elif registered_names:
+        raise McpSetupError(
+            "检测到其他 Abaqus MCP 名称，未自动删除：{0}".format(
+                "、".join(registered_names)
+            )
+        )
+
+    try:
+        _run_command(_registration_command(codex_cli, target, guard_entry))
+    except McpSetupError as error:
+        # 替换失败时尽力恢复原服务器，避免让原有配置彻底消失。
+        if MCP_SERVER_NAME in registered_names:
+            try:
+                _run_command(
+                    _registration_command(codex_cli, target, target / "mcp_server.py")
+                )
+            except McpSetupError:
+                pass
+        raise McpSetupError("防卡启动器注册失败：{0}".format(error)) from error
+    return "已将 Abaqus MCP 防卡启动器注册到 Codex。"
+
+
+def setup_mcp(
+    confirmed: bool, target: Optional[Path] = None, repair: bool = False
+) -> Dict[str, object]:
     """执行安装、插件配置、Codex 注册和最终验证。"""
 
     if not confirmed:
@@ -173,9 +219,10 @@ def setup_mcp(confirmed: bool, target: Optional[Path] = None) -> Dict[str, objec
     messages = [
         _ensure_source(install_target),
         _ensure_dependencies(install_target),
+        _ensure_guard_launcher(install_target),
     ]
     messages.extend(_ensure_abaqus_plugin(install_target))
-    messages.append(_ensure_codex_registration(install_target))
+    messages.append(_ensure_codex_registration(install_target, repair=repair))
 
     result = inspect_abaqus_mcp()
     if not result["usable"]:
@@ -185,10 +232,10 @@ def setup_mcp(confirmed: bool, target: Optional[Path] = None) -> Dict[str, objec
     return {"target": str(install_target), "messages": messages, "result": result}
 
 
-def main(confirmed: bool = False) -> int:
+def main(confirmed: bool = False, repair: bool = False) -> int:
     """运行 MCP 设置并显示每一步是否执行或跳过。"""
 
-    setup_result = setup_mcp(confirmed=confirmed)
+    setup_result = setup_mcp(confirmed=confirmed, repair=repair)
     for message in setup_result["messages"]:
         print("- {0}".format(message))
     print("最终状态：{0}".format(setup_result["result"]["message"]))

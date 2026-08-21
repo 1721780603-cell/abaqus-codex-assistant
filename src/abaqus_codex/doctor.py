@@ -18,9 +18,11 @@ def inspect_environment() -> Dict[str, object]:
     mcp = inspect_abaqus_mcp()
 
     core_usable = bool(abaqus["usable"] and abqpy["usable"])
-    ai_usable = bool(core_usable and mcp["usable"])
+    ai_configured = bool(core_usable and mcp["usable"])
+    ai_usable = bool(ai_configured and mcp["responsive"])
     return {
         "core_usable": core_usable,
+        "ai_configured": ai_configured,
         "ai_usable": ai_usable,
         "abaqus": abaqus,
         "abqpy": abqpy,
@@ -44,7 +46,14 @@ def print_environment_report(result: Dict[str, object]) -> None:
     if abqpy["version"]:
         print("  版本：{0}".format(abqpy["version"]))
     print("Abaqus MCP：{0}".format(mcp["message"]))
+    if not mcp["responsive"]:
+        print("  桥接诊断：{0}".format(mcp["bridge_status"]["message"]))
     print("本地基础模式：{0}".format("可用" if result["core_usable"] else "不可用"))
+    print(
+        "Codex MCP 配置：{0}".format(
+            "完成" if result["ai_configured"] else "未完成"
+        )
+    )
     print("Codex 智能模式：{0}".format("可用" if result["ai_usable"] else "不可用"))
 
 
