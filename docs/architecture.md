@@ -34,8 +34,9 @@ Python 3 生成中文 report.md
 
 - `environment.py`：Abaqus 与自带 Python；
 - `abqpy_environment.py`：abqpy 版本匹配；
-- `mcp_environment.py`：MCP 文件、Codex 注册和导入验证；
-- `mcp_setup.py`：经明确确认后的固定版本安装；
+- `mcp_environment.py`：MCP 文件、Codex 注册、导入验证和 Abaqus 插件心跳检查；
+- `mcp_guard.py`：工具调用前检查心跳与进程，桥接离线时快速返回；
+- `mcp_setup.py`：经明确确认后的固定版本安装和防卡注册修复；
 - `doctor.py`：综合体检；
 - `configuration.py`：输入校验；
 - `local_ai.py`：只通过本机回环地址读取模型并生成受约束的矩形板参数；

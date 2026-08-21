@@ -8,7 +8,7 @@
 .\.venv\Scripts\python.exe -m abaqus_codex doctor
 ```
 
-程序依次检查 Abaqus 命令与版本、Abaqus 自带 Python、abqpy 版本、MCP 文件、Codex 注册和 MCP 本地导入。
+程序依次检查 Abaqus 命令与版本、Abaqus 自带 Python、abqpy 版本、MCP 文件、Codex 注册、MCP 本地导入、插件心跳和 Abaqus 进程。
 
 没有 Abaqus 时程序停止建模，并提示从正规渠道安装和配置许可证。项目不分发 Abaqus。
 
@@ -21,6 +21,14 @@
 ```
 
 没有 `--yes` 时安装器不会修改电脑。已有用户文件不会被覆盖，安装后必须再次导入服务器验证。
+
+已有 MCP 调用一直转圈时，使用明确修复参数切换到防卡启动器：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-setup --repair --yes
+```
+
+修复后需要重新打开 Codex，再启动 Abaqus/CAE 中的 MCP 插件。
 
 ## 3. 使用场景
 
