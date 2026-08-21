@@ -12,6 +12,7 @@
 - 检测 `abqpy` 安装状态和版本兼容性；
 - 检测 Abaqus MCP 文件、Codex 注册和本地启动状态；
 - 检测 MCP 心跳和 Abaqus 进程，并在桥接离线时快速返回，避免工具持续转圈；
+- 支持在隐藏的 `Abaqus cae noGUI` 进程中运行 MCP，避免 CAE 图形界面被轮询占用；
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
 - 选择入门、论文复现、科研、生产或教学场景；
 - 检测本机 Ollama 或 LM Studio，并把中文需求转换为受约束的矩形板 JSON；
@@ -78,6 +79,16 @@ py -m venv .venv
 ```
 
 详细原因和排查步骤见 [Abaqus MCP 一直转圈排查](docs/mcp-troubleshooting.md)。
+
+如果 GUI 模式仍导致进度条和鼠标转圈，使用无界面后台桥接：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless start
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless status
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless stop
+```
+
+该模式使用独立 Abaqus/CAE 许可证会话，不显示操作界面，也不会预先打开任何私人模型。
 
 保存使用场景：
 
@@ -226,7 +237,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 68 项离线测试；
+- GitHub Actions 自动运行语法检查和 79 项离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；

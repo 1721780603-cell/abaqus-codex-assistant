@@ -6,6 +6,9 @@
 
 ### 新增
 
+- 隐藏运行的 `Abaqus cae noGUI` MCP 后台桥接及 start/status/stop 命令；
+- Windows 使用只读进程句柄检查 PID，避免 Python 3.13 的 `os.kill` 兼容异常；
+- 11 项后台桥接和 Windows 进程检查测试，离线测试总数增加到 79 项；
 - MCP 插件心跳、状态新鲜度和 Abaqus 进程检测；
 - MCP 防卡启动器与显式 `mcp-setup --repair --yes` 修复流程；
 - 11 项不启动 Abaqus 的 MCP 防卡测试，离线测试总数增加到 68 项；

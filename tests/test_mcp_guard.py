@@ -4,11 +4,16 @@
 import json
 import tempfile
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
 from abaqus_codex.doctor import inspect_environment
-from abaqus_codex.mcp_guard import guarded_sender, inspect_bridge_status
+from abaqus_codex.mcp_guard import (
+    guarded_sender,
+    inspect_bridge_status,
+    process_is_running,
+)
 from abaqus_codex.mcp_setup import (
     MCP_SERVER_NAME,
     McpSetupError,
@@ -82,6 +87,16 @@ class McpBridgeStatusTests(unittest.TestCase):
             result = inspect_bridge_status(path, now=1000.0)
         self.assertFalse(result["responsive"])
         self.assertEqual(result["status"], "future")
+
+    def test_current_process_is_running(self):
+        """当前测试进程必须能在 Windows 和 Linux 上被安全识别。"""
+
+        self.assertTrue(process_is_running(os.getpid()))
+
+    def test_impossible_process_is_not_running(self):
+        """明显无效的高 PID 不应被误报为在线。"""
+
+        self.assertFalse(process_is_running(2147483647))
 
 
 class McpGuardSenderTests(unittest.TestCase):

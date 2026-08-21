@@ -50,3 +50,29 @@ Abaqus MCP 包含两个独立部分：Codex 启动的 MCP 服务器，以及 Aba
 - 不要把 `commands` 目录里的 JSON 当作脚本手工执行。
 
 防卡启动器解决的是“离线时长时间等待”，不会自动启动 Abaqus，也不会掩盖插件自身错误。
+
+## GUI 一直显示进度条怎么办
+
+`Background` 在部分 Abaqus 版本中无法稳定轮询；`Cooperative` 和 `Blocking` 又可能占用 CAE 图形主线程，使顶部进度条来回移动、鼠标转圈。
+
+这种情况可以停止 GUI 中的 MCP，改用独立的无界面后台桥接：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless start
+```
+
+它通过 `Abaqus cae noGUI` 启动隐藏进程，不打开私人 `.cae` 文件。Codex 可以在该进程的空白模型数据库中执行经过确认的建模脚本、保存模型或提交作业。
+
+查看状态：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless status
+```
+
+完成后优雅停止：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless stop
+```
+
+标准输出和错误日志位于 `%USERPROFILE%\.abaqus-mcp\headless_bridge_*.log`。该模式会使用一个独立 Abaqus/CAE 许可证会话；许可证不足时启动会失败并在日志中说明。
