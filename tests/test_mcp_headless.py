@@ -3,7 +3,7 @@
 
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest.mock import Mock, patch
 
 from abaqus_codex.mcp_headless import (
@@ -36,24 +36,29 @@ def offline_result():
 class HeadlessCommandTests(unittest.TestCase):
     """确认不同平台的固定命令参数正确。"""
 
-    @patch("abaqus_codex.mcp_headless.os.name", "nt")
     def test_windows_batch_uses_cmd(self):
         """Windows 批处理必须交给 cmd.exe，但不拼接用户 shell 文本。"""
 
         with patch.dict("os.environ", {"COMSPEC": r"C:\Windows\System32\cmd.exe"}):
             args = _abaqus_arguments(
-                Path(r"C:\SIMULIA\Commands\abaqus.bat"),
-                Path(r"C:\Users\User\.abaqus-mcp\mcp_headless_bridge.py"),
+                PureWindowsPath(r"C:\SIMULIA\Commands\abaqus.bat"),
+                PureWindowsPath(
+                    r"C:\Users\User\.abaqus-mcp\mcp_headless_bridge.py"
+                ),
+                system_name="nt",
             )
         self.assertEqual(args[1:3], ["/d", "/c"])
         self.assertEqual(args[-2], "cae")
         self.assertTrue(args[-1].startswith("noGUI="))
 
-    @patch("abaqus_codex.mcp_headless.os.name", "posix")
     def test_regular_executable_uses_direct_arguments(self):
         """非批处理命令应直接传递参数列表。"""
 
-        args = _abaqus_arguments(Path("/opt/abaqus"), Path("/tmp/bridge.py"))
+        args = _abaqus_arguments(
+            PurePosixPath("/opt/abaqus"),
+            PurePosixPath("/tmp/bridge.py"),
+            system_name="posix",
+        )
         self.assertEqual(args, ["/opt/abaqus", "cae", "noGUI=/tmp/bridge.py"])
 
 

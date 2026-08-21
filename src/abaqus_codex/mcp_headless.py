@@ -66,11 +66,16 @@ def _write_managed_script(home: Path) -> Path:
     return path
 
 
-def _abaqus_arguments(command: Path, script: Path) -> list[str]:
-    """构造固定参数命令，避免把用户文本交给 shell 解释。"""
+def _abaqus_arguments(
+    command: Path,
+    script: Path,
+    system_name: Optional[str] = None,
+) -> list[str]:
+    """构造固定参数命令；可传入平台名，方便跨平台测试。"""
 
     no_gui_argument = "noGUI={0}".format(script)
-    if os.name == "nt" and command.suffix.lower() in {".bat", ".cmd"}:
+    current_system = os.name if system_name is None else system_name
+    if current_system == "nt" and command.suffix.lower() in {".bat", ".cmd"}:
         return [
             os.environ.get("COMSPEC", "cmd.exe"),
             "/d",
