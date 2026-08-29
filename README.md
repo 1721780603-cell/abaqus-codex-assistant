@@ -11,6 +11,7 @@
 - 检测 Abaqus 安装位置、版本及自带 Python；
 - 检测 `abqpy` 安装状态和版本兼容性；
 - 检测 Abaqus MCP 文件、Codex 注册和本地启动状态；
+- 提供首次启动体检，分层检查项目 Python、GitHub 登录、Zotero 本地连接和 ScienceDirect 人工机构访问；
 - 检测 MCP 心跳和 Abaqus 进程，并在桥接离线时快速返回，避免工具持续转圈；
 - 支持在隐藏的 `Abaqus cae noGUI` 进程中运行 MCP，避免 CAE 图形界面被轮询占用；
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
@@ -63,7 +64,9 @@
 使用 $abaqus-modeling-guide 带我一步步建立并运行第一个 Abaqus 模型。
 ```
 
-向导会先检查项目和软件环境，再一次只询问一组参数。它会把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。
+向导会先运行只读首次体检，再让用户选择“基础建模”“Codex 智能建模”“科研复现全套”或“单项修复”。它一次只处理一个缺项；安装、注册、启用、重启和登录均不会静默执行。ScienceDirect 机构登录必须由用户本人在官方网页完成，Skill 不读取密码、验证码、Cookie 或会话令牌。
+
+体检完成后，向导会一次只询问一组建模参数。它把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。
 
 ## 快速开始
 
@@ -76,7 +79,16 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-检查环境：
+运行首次启动体检；普通输出适合人阅读，JSON 输出适合 Skill 判断下一步：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex onboard
+.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
+```
+
+这两个命令只读取状态，不会安装软件、修改配置或替用户登录。ScienceDirect 状态会保持为“需要用户确认”，不会根据浏览器 Cookie 猜测登录成功。
+
+只检查 Abaqus、abqpy 和 MCP 核心环境：
 
 ```powershell
 .\.venv\Scripts\python.exe -m abaqus_codex doctor
@@ -262,7 +274,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 - 缺陷和功能建议使用仓库内置 Issue 表单；
 - 所有改动通过分支和 Pull Request 提交；
-- GitHub Actions 自动运行语法检查和 79 项离线测试；
+- GitHub Actions 自动运行语法检查和离线测试；
 - Dependabot 每月检查 Python 与 GitHub Actions 依赖；
 - 版本变化记录在 [CHANGELOG](CHANGELOG.md)；
 - 发布前按照 [发布清单](RELEASING.md) 完成真实 Abaqus 验证；
@@ -272,7 +284,7 @@ CI 同时覆盖 Linux、Windows、Python 3.10 和 Python 3.13。当前真实 Aba
 
 Abaqus MCP 可以执行 Abaqus Python 脚本，属于高权限本地能力。不要让不可信内容直接进入任意脚本执行工具。详细规则见 [SECURITY.md](SECURITY.md)。
 
-论文复现功能第一阶段仅保存场景和合法访问提醒，尚未自动下载论文。项目不得保存机构账号、密码、Cookie、验证码或会话令牌，也不得绕过付费墙。详见 [论文复现边界](docs/paper-reproduction-boundaries.md)。
+论文复现功能第一阶段只检查 GitHub 与 Zotero 本地状态，并引导用户使用合法的机构访问或开放获取来源，尚未自动下载论文。项目不得保存机构账号、密码、Cookie、验证码或会话令牌，也不得绕过付费墙。详见 [论文复现边界](docs/paper-reproduction-boundaries.md)。
 
 ## 文档
 

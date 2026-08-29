@@ -6,6 +6,9 @@
 
 ### 新增
 
+- 首次启动 `onboard` / `onboard --json` 命令，分层检查 Abaqus 建模环境、Codex MCP、GitHub CLI 登录和 Zotero 本地连接；
+- ScienceDirect 机构访问人工确认边界，以及基础建模、智能建模、科研复现和单项修复四条新手路线；
+- 14 项不连接真实外部服务的首次启动向导与凭据保护测试，以及 1 项受限 MCP 依赖目录回归测试，离线测试总数增加到 98 项；
 - 可安装的 `abaqus-modeling-guide` Skill，一次一个问题引导环境检查、建模、校验、求解和结果解读；
 - 不启动 Abaqus 的 `validate --config` 配置检查命令；
 - 2 项命令行校验测试和 2 项 Skill 同步测试，离线测试总数增加到 83 项；

@@ -42,6 +42,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("doctor", help="检查 Abaqus、abqpy 和 Abaqus MCP。")
 
+    onboard_parser = subparsers.add_parser(
+        "onboard", help="首次启动时检查建模、GitHub、Zotero 和科研访问。"
+    )
+    onboard_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="输出便于 Codex Skill 读取的 JSON，不执行安装或登录。",
+    )
+
     mcp_parser = subparsers.add_parser(
         "mcp-setup", help="安装或注册固定版本的 Abaqus MCP。"
     )
@@ -186,6 +195,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if args.command == "doctor":
             return doctor_main()
+
+        if args.command == "onboard":
+            from abaqus_codex.onboarding import (
+                inspect_onboarding,
+                print_onboarding_report,
+            )
+
+            # 首次启动体检只读状态；缺项是正常结果，不把它当成命令失败。
+            result = inspect_onboarding()
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print_onboarding_report(result)
+            return 0
 
         if args.command == "mcp-setup":
             from abaqus_codex.mcp_setup import main as mcp_setup_main

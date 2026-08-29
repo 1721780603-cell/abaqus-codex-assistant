@@ -29,17 +29,18 @@ git clone https://github.com/1721780603-cell/abaqus-codex-assistant.git
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m abaqus_codex doctor
+.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
 ```
 
-第一条只创建项目虚拟环境，第二条以可编辑方式安装本项目，第三条只做环境检查。若安装需要访问网络，先说明并请求同意。
+第一条只创建项目虚拟环境，第二条以可编辑方式安装本项目，第三条只做首次启动检查，不会自动安装或登录。若安装需要访问网络，先说明并请求同意。体检完成后按 [onboarding.md](onboarding.md) 只让用户选择一条下一步路线。
 
 ## 处理体检结果
 
 - **没有 Abaqus**：停止自动操作，引导用户从 Dassault Systèmes 官方渠道安装并配置合法许可证。不要替用户下载非官方安装包。
 - **Abaqus 可用、abqpy 缺失或版本不匹配**：根据体检得到的 Abaqus 年份建议对应的 `abqpy==<年份>.*`。展示命令并在安装前征得同意。
-- **MCP 缺失**：基础建模仍可继续。只有用户选择 Codex 智能模式时才介绍 `mcp-setup`。
+- **MCP 缺失**：基础建模仍可继续。只有用户选择 Codex 智能模式时才介绍 `mcp-setup`；说明该命令会下载代码并修改用户级 MCP 配置，获得同意后才能带 `--yes` 执行。
 - **MCP 已配置但离线**：普通建模继续使用 CLI；用户需要 MCP 时再检查 `mcp-headless status`。
+- **GitHub、Zotero 或 ScienceDirect 未就绪**：不影响基础建模。只在用户选择“科研复现全套”或指定单项修复时处理，并遵守 [onboarding.md](onboarding.md) 中的凭据和付费墙安全边界。
 - **Fortran 缺失**：前四个二维模型仍可继续；只阻止三维移动荷载模型。
 
 体检完成不等于结果可信。正式工程仍需核对单位、材料、边界条件、网格收敛性和适用规范。

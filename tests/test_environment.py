@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """测试 Abaqus 环境检测中的纯文本解析功能。"""
 
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from abaqus_codex.abqpy_environment import (
     abqpy_matches_abaqus,
@@ -11,7 +14,10 @@ from abaqus_codex.environment import (
     parse_abaqus_python_info,
     parse_abaqus_version,
 )
-from abaqus_codex.mcp_environment import parse_abaqus_mcp_names
+from abaqus_codex.mcp_environment import (
+    parse_abaqus_mcp_names,
+    vendor_python_paths,
+)
 from abaqus_codex.mcp_setup import McpSetupError, setup_mcp
 
 
@@ -80,6 +86,34 @@ class AbaqusMcpListParseTests(unittest.TestCase):
 
         output = "No MCP servers configured yet."
         self.assertEqual(parse_abaqus_mcp_names(output), [])
+
+
+class AbaqusMcpVendorPathTests(unittest.TestCase):
+    """确认 MCP 可选依赖目录受限时，环境体检仍能继续。"""
+
+    def test_unreadable_optional_directory_is_skipped(self) -> None:
+        """无权读取单个 pywin32 子目录时不应中断整个首次向导。"""
+
+        with tempfile.TemporaryDirectory() as directory:
+            vendor_path = Path(directory) / "vendor"
+            win32_path = vendor_path / "win32"
+            win32_path.mkdir(parents=True)
+            blocked_path = win32_path / "lib"
+            original_is_dir = Path.is_dir
+
+            def guarded_is_dir(path: Path) -> bool:
+                """模拟沙箱只拒绝一个可选子目录。"""
+
+                if path == blocked_path:
+                    raise PermissionError("测试用拒绝访问")
+                return original_is_dir(path)
+
+            with patch.object(Path, "is_dir", guarded_is_dir):
+                paths = vendor_python_paths(vendor_path)
+
+        self.assertIn(vendor_path, paths)
+        self.assertIn(win32_path, paths)
+        self.assertNotIn(blocked_path, paths)
 
 
 class AbqpyVersionTests(unittest.TestCase):

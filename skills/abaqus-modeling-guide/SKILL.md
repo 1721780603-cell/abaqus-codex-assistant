@@ -1,6 +1,6 @@
 ---
 name: abaqus-modeling-guide
-description: 带 Abaqus 初学者逐步完成环境检查、选择教学模型、创建并校验个人 JSON 配置、确认后求解以及中文结果解读。适用于使用 Abaqus Codex Assistant 建立受支持模型；不用于任意复杂几何或直接给出生产设计结论。
+description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模或科研路线、创建并校验个人 JSON 配置、确认后求解以及中文结果解读。适用于使用 Abaqus Codex Assistant 建立受支持模型；不用于任意复杂几何或直接给出生产设计结论。
 ---
 
 # Abaqus 新手建模向导
@@ -10,7 +10,7 @@ description: 带 Abaqus 初学者逐步完成环境检查、选择教学模型�
 ## 对话方式
 
 - 每次说明“当前步骤、为什么要做、完成后得到什么”。
-- 默认一次只提出一个尚未解决的问题。用户明确说“全部使用教学默认值”时，可以合并后续问题。
+- 默认一次只提出一个尚未解决的问题。即使有多个环境缺项，也要先让用户选一条路线，再每次处理一项。用户明确说“全部使用教学默认值”时，可以合并后续建模参数问题，但不能合并授权确认。
 - 用 Abaqus 初学者能理解的语言解释参数，并同时给出参数在 JSON 中的字段名。
 - 不假装已执行命令。运行前先说命令会检查、创建或启动什么。
 - 保留用户已经回答的内容；不要反复询问。
@@ -18,17 +18,28 @@ description: 带 Abaqus 初学者逐步完成环境检查、选择教学模型�
 
 ## 工作流程
 
-### 1. 找到项目并检查环境
+### 1. 找到项目并运行首次向导
 
 先定位包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/` 的项目根目录。无法找到时，只问用户项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。
 
-在项目根目录运行：
+在项目根目录运行只读体检：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex doctor
+.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
 ```
 
-逐项解释 Abaqus、许可证、abqpy 和 MCP 的状态。基础建模不依赖 MCP；不要因为 MCP 未配置而阻止基础模式。任何下载、安装或用户级配置修改都必须先征得用户同意。
+命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言解释 Abaqus、Abaqus 内置 Python / abqpy、MCP、GitHub 和 Zotero 的状态；ScienceDirect 机构访问只能标记为“需用户确认”。然后只问一个问题：
+
+1. 基础建模：只补齐 Abaqus、内置 Python 和 abqpy；
+2. Codex 智能建模：在基础环境上连接 Abaqus MCP；
+3. 科研复现全套：先确认使用基础 CLI 还是 MCP 智能建模，再检查 GitHub、Zotero 和 ScienceDirect 机构访问；
+4. 我已有明确问题（单项修复）：只处理用户指定的一项。
+
+这四条路线互斥，每次只进入用户选中的一条。完整的状态判定、修复顺序和安全边界见 [references/onboarding.md](references/onboarding.md)。基础建模不依赖 MCP，GitHub、Zotero 和 ScienceDirect 也都是科研可选项，不要因为它们未就绪而阻止基础模式。
+
+用户明确说自己是完全新手或“不知道选哪个”时，推荐基础建模并解释一句理由，但仍等待用户确认，不能替他选择。介绍选项时不一次解释所有专业名词；先用“必需建模环境、Codex 联动、代码与文献工具”概括，选定后再解释该路线涉及的术语。
+
+任何下载、安装、MCP 注册、本地 API 启用、应用重启或打开登录页前，先说明要做什么、会改变什么，并征得用户同意。
 
 若当前环境不允许执行命令，说明原本要检查的内容和命令，不声称环境已通过；可以继续整理用户需求，但必须在真正写配置或求解前补做体检。
 
@@ -39,6 +50,8 @@ description: 带 Abaqus 初学者逐步完成环境检查、选择教学模型�
 ```powershell
 .\.venv\Scripts\python.exe -m abaqus_codex configure --scenario <场景名称>
 ```
+
+运行前说明该命令会创建本机 `configs/user_profile.json`，展示所选场景并征得确认；没有确认时只记录对话中的选择，不写文件。
 
 场景只调整解释和风险提醒，不替用户改变数值参数，也不根据学历推断论文访问权限。生产场景必须额外提醒复核规范、材料、接触、边界和网格收敛；教学示例结果不能直接转为生产结论。
 
@@ -65,6 +78,8 @@ description: 带 Abaqus 初学者逐步完成环境检查、选择教学模型�
 ### 5. 创建个人配置
 
 从所选模型的内置配置复制一份，在 `configs/user_models/<job_name>.json` 中编辑。不要修改内置示例，也不要覆盖已有个人配置，除非用户明确要求。
+
+写入前展示目标绝对路径和参数摘要，说明将新建个人 JSON，并单独征得确认。确认只覆盖当前路径和当前摘要；若文件已存在，必须重新询问是否覆盖。
 
 配置必须是 UTF-8 标准 JSON，不能含注释、密码、许可证地址、API Key、Cookie 或论文数据库会话。只写项目校验器支持的字段；不要向 JSON 中塞入任意 Python 或 Abaqus 命令。
 
