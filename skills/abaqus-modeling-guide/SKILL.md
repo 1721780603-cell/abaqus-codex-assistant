@@ -28,7 +28,7 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 .\.venv\Scripts\python.exe -m abaqus_codex onboard --json
 ```
 
-命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言解释 Abaqus、Abaqus 内置 Python / abqpy、MCP、GitHub 和 Zotero 的状态；ScienceDirect 机构访问只能标记为“需用户确认”。然后只问一个问题：
+命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言解释 Abaqus、Abaqus 内置 Python / abqpy、MCP、GitHub 和 Zotero 的状态；ScienceDirect 机构访问只能标记为“需用户确认”。涉及 Abaqus 年份、Python 代际或 MCP 兼容性时，先读取 [references/version-compatibility.md](references/version-compatibility.md)，不能把“检测到”说成“已经验证支持”。然后只问一个问题：
 
 1. 基础建模：只补齐 Abaqus、内置 Python 和 abqpy；
 2. Codex 智能建模：在基础环境上连接 Abaqus MCP；
@@ -36,6 +36,10 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 4. 我已有明确问题（单项修复）：只处理用户指定的一项。
 
 这四条路线互斥，每次只进入用户选中的一条。完整的状态判定、修复顺序和安全边界见 [references/onboarding.md](references/onboarding.md)。基础建模不依赖 MCP，GitHub、Zotero 和 ScienceDirect 也都是科研可选项，不要因为它们未就绪而阻止基础模式。
+
+当前版本的体检只解析 PATH 或常见目录中找到的第一个可用 Abaqus 命令，不会枚举电脑上的全部安装。先向用户显示这一个命令的路径、年份和内置 Python 状态；确认它正是用户要使用的版本、且年份为当前允许继续的 2021–2025 后，才可建议运行 `abqpy-setup --yes`，该命令会安装严格匹配的 `abqpy==<年份>.*`。若用户说明电脑装了多个 Abaqus、显示路径与预期不符、版本文字无法解析或检测结果不确定，停止 abqpy 自动安装、MCP 安装和求解，只问用户本次目标版本及启动命令/安装路径。明确说明多版本自动枚举和选择器仍是后续功能，不能声称其他安装不存在。
+
+若解析到 Abaqus 2026，只报告“已检测到 Abaqus 2026，但用户/项目实测兼容未通过，当前自动流程已禁用”。不得运行 `abqpy-setup --yes`、MCP 安装/修复/后台启动或任何 Abaqus 求解。检测仅用于给出清楚提示；不要猜测具体故障原因。只有项目完成修复和新的真机全流程验证后，才能恢复这些步骤。
 
 用户明确说自己是完全新手或“不知道选哪个”时，推荐基础建模并解释一句理由，但仍等待用户确认，不能替他选择。介绍选项时不一次解释所有专业名词；先用“必需建模环境、Codex 联动、代码与文献工具”概括，选定后再解释该路线涉及的术语。
 
@@ -120,6 +124,8 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 ## 能力边界
 
 - 当前只支持模型目录中的五类模型。面对任意复杂几何、接触、塑性或用户自定义装配时，明确说明尚未实现，并把需求整理成后续开发任务，不伪造结果。
+- 维护者目前只在 Abaqus 2021 上完成真机全流程验证。Abaqus 2022–2025 可以检测并进入候选兼容流程，但不得称为“已验证支持”。Abaqus 2026 为已知不兼容，自动安装、MCP 和求解流程禁用，只保留检测提示。
+- MCP 出现在 Codex 列表中只说明“已注册”。必须在用户选择的 Abaqus 版本中通过插件加载、心跳或 `ping` 以及至少一个只读能力探测后，才能称为“当前会话已连接”；任一步失败都不能继续开放任意脚本执行。
 - 不安装、破解或分发 Abaqus，不绕过许可证。
 - 不自动接入私人论文库或传出模型、日志、ODB 和凭据。
 - MCP 是可选的智能接口。GUI 转圈时可在用户同意后使用 `mcp-headless start`，但普通配置建模优先使用可追溯的 CLI 流程。

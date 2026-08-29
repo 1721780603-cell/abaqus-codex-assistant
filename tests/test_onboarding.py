@@ -17,6 +17,7 @@ from abaqus_codex.cli import main
 from abaqus_codex.onboarding import (
     ZOTERO_BASE_URL,
     _probe_zotero_endpoint,
+    build_version_plan,
     inspect_github,
     inspect_onboarding,
     inspect_sciencedirect,
@@ -320,6 +321,77 @@ class OnboardingAggregateTests(unittest.TestCase):
         self.assertTrue(result["readiness"]["research_local_tools"])
         self.assertTrue(result["readiness"]["science_direct_requires_user"])
         environment_mock.assert_called_once_with()
+
+
+class VersionPlanTests(unittest.TestCase):
+    """确认首次向导按检测年份生成明确且保守的安装计划。"""
+
+    def test_2021_verified_plan_installs_missing_abqpy_before_mcp(self):
+        """已验证的 2021 若缺少 abqpy，应先补基础环境而不是直接装 MCP。"""
+
+        environment = {
+            "abaqus": {
+                "usable": True,
+                "version": "2021",
+                "python_version": "2.7.15",
+                "command": r"C:\ABAQUS2021\commands\abaqus.bat",
+            },
+            "abqpy": {
+                "installed": False,
+                "usable": False,
+                "recommended_requirement": "abqpy==2021.*",
+                "abaqus_verification_level": "maintainer_verified",
+            },
+            "mcp": {
+                "files_installed": False,
+                "usable": False,
+                "responsive": False,
+            },
+        }
+
+        plan = build_version_plan(environment)
+
+        self.assertEqual(plan["release_year"], 2021)
+        self.assertEqual(plan["verification_level"], "maintainer_verified")
+        self.assertEqual(
+            plan["recommended_abqpy_requirement"], "abqpy==2021.*"
+        )
+        self.assertEqual(plan["abqpy_action"], "install_matching")
+        self.assertEqual(plan["mcp_action"], "wait_for_base")
+        self.assertFalse(plan["model_smoke_test_required"])
+
+    def test_2026_known_incompatible_plan_blocks_abqpy_and_mcp(self):
+        """2026 仍应显示检测结果，但不得给出 abqpy 或 MCP 安装动作。"""
+
+        environment = {
+            "abaqus": {
+                "usable": True,
+                "version": "2026",
+                "python_version": "3.10.5",
+                "command": r"C:\SIMULIA\Commands\abq2026.bat",
+            },
+            "abqpy": {
+                "installed": False,
+                "usable": False,
+                "version": None,
+                "recommended_requirement": None,
+                "abaqus_verification_level": "known_incompatible",
+            },
+            "mcp": {
+                "files_installed": False,
+                "usable": False,
+                "responsive": False,
+            },
+        }
+
+        plan = build_version_plan(environment)
+
+        self.assertEqual(plan["detected_abaqus_version"], "2026")
+        self.assertEqual(plan["release_year"], 2026)
+        self.assertEqual(plan["verification_level"], "known_incompatible")
+        self.assertIsNone(plan["recommended_abqpy_requirement"])
+        self.assertEqual(plan["abqpy_action"], "unsupported")
+        self.assertEqual(plan["mcp_action"], "blocked_incompatible")
 
 
 class OnboardingOutputTests(unittest.TestCase):

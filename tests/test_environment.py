@@ -7,10 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from abaqus_codex.abqpy_environment import (
+    abaqus_verification_level,
     abqpy_matches_abaqus,
     parse_release_year,
+    recommended_abqpy_requirement,
 )
 from abaqus_codex.environment import (
+    inspect_abaqus_command,
     parse_abaqus_python_info,
     parse_abaqus_version,
 )
@@ -29,6 +32,12 @@ class AbaqusVersionParseTests(unittest.TestCase):
 
         output = "Abaqus JOB abaqus\nAbaqus 2021\nAbaqus JOB abaqus COMPLETED"
         self.assertEqual(parse_abaqus_version(output), "2021")
+
+    def test_parse_known_incompatible_2026_version(self) -> None:
+        """不兼容只阻止安装和运行，不能导致体检漏掉 Abaqus 2026。"""
+
+        output = "SIMULIA Established Products\nAbaqus 2026\nInformation complete"
+        self.assertEqual(parse_abaqus_version(output), "2026")
 
     def test_parse_legacy_version(self) -> None:
         """应当识别 Abaqus 6.14-5 形式的旧版本号。"""
@@ -66,6 +75,35 @@ class AbaqusPythonParseTests(unittest.TestCase):
 
         self.assertIsNone(version)
         self.assertIsNone(executable)
+
+
+class AbaqusCommandInspectionTests(unittest.TestCase):
+    """确认显式命令的版本与 Python 查询始终复用同一路径。"""
+
+    @patch("abaqus_codex.environment.query_abaqus_python")
+    @patch("abaqus_codex.environment.query_abaqus_release")
+    def test_explicit_command_is_used_for_both_queries_and_returned(
+        self, release_mock, python_mock
+    ) -> None:
+        """检测结果中的命令必须正是版本和 Python 查询使用的命令。"""
+
+        release_mock.return_value = (0, "Abaqus 2025")
+        python_mock.return_value = (
+            0,
+            "ABAQUS_PYTHON_VERSION=3.10.5\n"
+            "ABAQUS_PYTHON_EXECUTABLE=C:\\SIMULIA\\SMAPython.exe\n",
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "abq2025.bat"
+            resolved_command = command.resolve()
+            result = inspect_abaqus_command(command)
+
+        release_mock.assert_called_once_with(resolved_command)
+        python_mock.assert_called_once_with(resolved_command)
+        self.assertTrue(result["usable"])
+        self.assertEqual(result["version"], "2025")
+        self.assertEqual(result["command"], str(resolved_command))
 
 
 class AbaqusMcpListParseTests(unittest.TestCase):
@@ -139,6 +177,41 @@ class AbqpyVersionTests(unittest.TestCase):
 
         self.assertIsNone(abqpy_matches_abaqus("6.14-5", "2021.7.3"))
 
+    def test_recommended_requirement_uses_detected_year_exactly(self) -> None:
+        """兼容候选年份必须生成同年份安装规格，不能回退到 2021。"""
+
+        self.assertEqual(
+            recommended_abqpy_requirement("2022"), "abqpy==2022.*"
+        )
+        self.assertEqual(
+            recommended_abqpy_requirement("2025"), "abqpy==2025.*"
+        )
+
+    def test_known_incompatible_2026_has_no_install_requirement(self) -> None:
+        """已知不兼容的 2026 不得生成会被 Skill 执行的 pip 规格。"""
+
+        self.assertIsNone(recommended_abqpy_requirement("2026"))
+
+    def test_unknown_release_has_no_recommended_requirement(self) -> None:
+        """无法识别年份时不应猜测可安装的 abqpy 版本。"""
+
+        self.assertIsNone(recommended_abqpy_requirement(None))
+        self.assertIsNone(recommended_abqpy_requirement("6.14-5"))
+
+    def test_verification_level_separates_verified_and_detected(self) -> None:
+        """真机验证、仅检测和未知版本必须使用不同状态。"""
+
+        self.assertEqual(
+            abaqus_verification_level("2021"), "maintainer_verified"
+        )
+        self.assertEqual(
+            abaqus_verification_level("2022"), "detected_unverified"
+        )
+        self.assertEqual(
+            abaqus_verification_level("2026"), "known_incompatible"
+        )
+        self.assertEqual(abaqus_verification_level("6.14-5"), "unknown")
+
 
 class McpSetupConsentTests(unittest.TestCase):
     """确认 MCP 安装必须由用户明确授权。"""
@@ -148,6 +221,63 @@ class McpSetupConsentTests(unittest.TestCase):
 
         with self.assertRaises(McpSetupError):
             setup_mcp(confirmed=False)
+
+    @patch("abaqus_codex.mcp_setup._ensure_source")
+    @patch("abaqus_codex.mcp_setup.inspect_abaqus")
+    def test_unusable_abaqus_is_rejected_before_mcp_download(
+        self, inspect_abaqus_mock, ensure_source_mock
+    ) -> None:
+        """即使已有 --yes，没有可用 Abaqus 时也必须在下载前停止。"""
+
+        inspect_abaqus_mock.return_value = {
+            "installed": False,
+            "usable": False,
+            "version": None,
+            "python_version": None,
+        }
+
+        with self.assertRaisesRegex(McpSetupError, "没有检测到可用的 Abaqus"):
+            setup_mcp(confirmed=True)
+
+        ensure_source_mock.assert_not_called()
+
+    @patch("abaqus_codex.mcp_setup._ensure_source")
+    @patch("abaqus_codex.mcp_setup.inspect_abaqus")
+    def test_unrecognized_legacy_release_is_rejected_before_mcp_download(
+        self, inspect_abaqus_mock, ensure_source_mock
+    ) -> None:
+        """旧式版本无法映射到年份时不得猜测兼容性并下载 MCP。"""
+
+        inspect_abaqus_mock.return_value = {
+            "installed": True,
+            "usable": True,
+            "version": "6.14-5",
+            "python_version": "2.7.3",
+        }
+
+        with self.assertRaisesRegex(McpSetupError, "无法按年份识别"):
+            setup_mcp(confirmed=True)
+
+        ensure_source_mock.assert_not_called()
+
+    @patch("abaqus_codex.mcp_setup._ensure_source")
+    @patch("abaqus_codex.mcp_setup.inspect_abaqus")
+    def test_known_incompatible_2026_is_rejected_before_mcp_download(
+        self, inspect_abaqus_mock, ensure_source_mock
+    ) -> None:
+        """即使 2026 可启动且用户给了 --yes，也必须在任何 MCP 下载前拒绝。"""
+
+        inspect_abaqus_mock.return_value = {
+            "installed": True,
+            "usable": True,
+            "version": "2026",
+            "python_version": "3.10.5",
+        }
+
+        with self.assertRaises(McpSetupError):
+            setup_mcp(confirmed=True)
+
+        ensure_source_mock.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""在 Abaqus/CAE 2021 中建立、求解并读取二维方板双向拉伸模型。"""
+"""在 Abaqus/CAE 中建立、求解并读取二维方板双向拉伸模型。"""
 
 from __future__ import print_function
 
@@ -29,6 +29,13 @@ import mesh
 import regionToolset
 
 
+# Abaqus 2021 使用 Python 2，Abaqus 2024 及更新版本使用 Python 3。
+try:
+    _TEXT_TYPE = unicode
+except NameError:
+    _TEXT_TYPE = str
+
+
 def _input_paths():
     """读取 abqpy 放在双横线之后的配置和结果路径。"""
 
@@ -46,9 +53,9 @@ def _load_config(path):
 
 
 def _byteify(value):
-    """把 Python 2 JSON 产生的 unicode 递归转换为 Abaqus 可接受的字符串。"""
+    """仅在 Python 2 中把 JSON unicode 转为 Abaqus 接口需要的字节串。"""
 
-    if isinstance(value, unicode):
+    if sys.version_info[0] < 3 and isinstance(value, _TEXT_TYPE):
         return value.encode("utf-8")
     if isinstance(value, list):
         return [_byteify(item) for item in value]
@@ -67,10 +74,10 @@ def _write_result(path, data):
         os.makedirs(parent)
     with open(path, "wb") as stream:
         text = json.dumps(data, ensure_ascii=False, indent=2)
-        if isinstance(text, unicode):
+        if not isinstance(text, bytes):
             text = text.encode("utf-8")
         stream.write(text)
-        stream.write("\n")
+        stream.write(b"\n")
 
 
 def _build_model(config):

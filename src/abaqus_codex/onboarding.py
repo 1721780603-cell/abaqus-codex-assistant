@@ -13,6 +13,11 @@ from typing import Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
+from abaqus_codex.abqpy_environment import (
+    abaqus_verification_level,
+    parse_release_year,
+    recommended_abqpy_requirement,
+)
 from abaqus_codex.doctor import inspect_environment
 
 
@@ -154,6 +159,73 @@ def inspect_sciencedirect() -> Dict[str, object]:
     }
 
 
+def build_version_plan(environment: Dict[str, object]) -> Dict[str, object]:
+    """把环境体检转换为按年份执行的 abqpy 和 MCP 下一步计划。"""
+
+    # 使用 get 保持向导能读取较旧的体检结果，而不是因为缺少新字段直接崩溃。
+    abaqus = environment.get("abaqus", {})
+    abqpy = environment.get("abqpy", {})
+    mcp = environment.get("mcp", {})
+    abaqus_version = abaqus.get("version")
+    release_year = parse_release_year(abaqus_version)
+    requirement = abqpy.get("recommended_requirement")
+    if not requirement:
+        requirement = recommended_abqpy_requirement(abaqus_version)
+    verification_level = abqpy.get("abaqus_verification_level")
+    if not verification_level:
+        verification_level = abaqus_verification_level(abaqus_version)
+
+    if verification_level == "known_incompatible":
+        abqpy_action = "unsupported"
+    elif verification_level == "detected_unsupported":
+        abqpy_action = "manual_review"
+    elif not abaqus.get("usable"):
+        abqpy_action = "wait_for_abaqus"
+    elif requirement is None:
+        abqpy_action = "manual_review"
+    elif abqpy.get("usable"):
+        abqpy_action = "ready"
+    elif not abqpy.get("installed"):
+        abqpy_action = "install_matching"
+    else:
+        abqpy_action = "replace_mismatched"
+
+    base_ready = bool(abaqus.get("usable") and abqpy.get("usable"))
+    if verification_level == "known_incompatible":
+        mcp_action = "blocked_incompatible"
+    elif verification_level == "detected_unsupported":
+        mcp_action = "blocked_unsupported"
+    elif not base_ready:
+        mcp_action = "wait_for_base"
+    elif mcp.get("responsive"):
+        mcp_action = "ready"
+    elif not mcp.get("files_installed"):
+        mcp_action = "install"
+    elif not mcp.get("usable"):
+        mcp_action = "setup_or_repair"
+    else:
+        # 注册和导入成功并不等于 Abaqus 插件已经响应，仍需启动后做心跳探测。
+        mcp_action = "start_and_probe"
+
+    return {
+        "detected_abaqus_version": abaqus_version,
+        "detected_abaqus_python": abaqus.get("python_version"),
+        "selected_abaqus_command": abaqus.get("command"),
+        "release_year": release_year,
+        "verification_level": verification_level,
+        "recommended_abqpy_requirement": requirement,
+        "abqpy_action": abqpy_action,
+        "mcp_action": mcp_action,
+        "mcp_requires_heartbeat_probe": verification_level
+        in ("maintainer_verified", "detected_unverified")
+        and not bool(mcp.get("responsive")),
+        "model_execution_allowed": verification_level
+        in ("maintainer_verified", "detected_unverified"),
+        "model_smoke_test_required": verification_level
+        == "detected_unverified",
+    }
+
+
 def inspect_onboarding() -> Dict[str, object]:
     """汇总一次首次启动体检，供 CLI 和 Codex Skill 使用。"""
 
@@ -172,6 +244,7 @@ def inspect_onboarding() -> Dict[str, object]:
         "schema_version": 1,
         "project_python": project_python,
         "environment": environment,
+        "version_plan": build_version_plan(environment),
         "github": github,
         "zotero": zotero,
         "science_direct": science_direct,
@@ -202,12 +275,41 @@ def print_onboarding_report(result: Dict[str, object]) -> None:
     zotero = result["zotero"]
     science_direct = result["science_direct"]
     readiness = result["readiness"]
+    version_plan = result.get("version_plan") or build_version_plan(environment)
 
     print("Abaqus Codex Assistant 首次启动向导")
     print("====================================")
     print("1. 基础建模")
     print("   项目 Python：{0}".format(project_python["message"]))
     print("   Abaqus：{0}".format(environment["abaqus"]["message"]))
+    if version_plan["detected_abaqus_version"]:
+        print(
+            "   检测版本：Abaqus {0}".format(
+                version_plan["detected_abaqus_version"]
+            )
+        )
+    if version_plan["detected_abaqus_python"]:
+        print(
+            "   内置 Python：{0}".format(
+                version_plan["detected_abaqus_python"]
+            )
+        )
+    if version_plan["recommended_abqpy_requirement"]:
+        print(
+            "   推荐 abqpy：{0}".format(
+                version_plan["recommended_abqpy_requirement"]
+            )
+        )
+    if version_plan["verification_level"] == "maintainer_verified":
+        print("   支持状态：该年份已完成维护者真机求解验证。")
+    elif version_plan["verification_level"] == "known_incompatible":
+        print("   支持状态：该年份已知不兼容，自动安装和运行已停止。")
+    elif version_plan["verification_level"] == "detected_unsupported":
+        print("   支持状态：已识别年份，但尚未列入自动流程，需要人工评估。")
+    elif version_plan["verification_level"] == "detected_unverified":
+        print("   支持状态：可自动检测，但尚未完成维护者真机求解验证。")
+    else:
+        print("   支持状态：无法按年份自动判断，需要人工检查。")
     print("   Abaqus Python / abqpy：{0}".format(environment["abqpy"]["message"]))
     print("   结果：{0}".format(_state(readiness["base_modeling"])))
     print("2. Codex 智能建模")

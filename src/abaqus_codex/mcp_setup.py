@@ -10,6 +10,13 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from abaqus_codex.abqpy_environment import (
+    abaqus_verification_level,
+    is_automation_allowed,
+    is_known_incompatible,
+    parse_release_year,
+)
+from abaqus_codex.environment import inspect_abaqus
 from abaqus_codex.mcp_environment import (
     inspect_abaqus_mcp,
     parse_abaqus_mcp_names,
@@ -215,12 +222,44 @@ def setup_mcp(
             "MCP 安装会下载代码并修改用户配置；请检查说明后使用 --yes 确认。"
         )
 
+    # 在任何下载和配置写入前先确认真实 Abaqus 版本，避免把 MCP 装到错误环境。
+    abaqus = inspect_abaqus()
+    if not abaqus["usable"]:
+        raise McpSetupError(
+            "没有检测到可用的 Abaqus 及其内置 Python，未下载或安装 MCP。"
+        )
+    release_year = parse_release_year(abaqus["version"])
+    if release_year is None:
+        raise McpSetupError(
+            "检测到的 Abaqus 版本无法按年份识别，请人工确认兼容性后再安装 MCP。"
+        )
+    if is_known_incompatible(abaqus["version"]):
+        raise McpSetupError(
+            "Abaqus {0} 已被项目列为已知不兼容，未下载或安装 MCP。".format(
+                abaqus["version"]
+            )
+        )
+    if not is_automation_allowed(abaqus["version"]):
+        raise McpSetupError(
+            "Abaqus {0} 尚未列入自动 MCP 流程，未下载或安装。".format(
+                abaqus["version"]
+            )
+        )
+
     install_target = (target or (Path.home() / ".abaqus-mcp")).resolve()
     messages = [
+        "已检测到 Abaqus {0}（内置 Python {1}）。".format(
+            abaqus["version"], abaqus["python_version"]
+        ),
         _ensure_source(install_target),
         _ensure_dependencies(install_target),
         _ensure_guard_launcher(install_target),
     ]
+    if abaqus_verification_level(abaqus["version"]) != "maintainer_verified":
+        messages.insert(
+            1,
+            "该年份尚未完成维护者真机求解验证；安装后仍需心跳和只读能力探测。",
+        )
     messages.extend(_ensure_abaqus_plugin(install_target))
     messages.append(_ensure_codex_registration(install_target, repair=repair))
 
@@ -229,7 +268,15 @@ def setup_mcp(
         raise McpSetupError(
             "安装步骤已结束，但最终验证未通过：{0}".format(result["message"])
         )
-    return {"target": str(install_target), "messages": messages, "result": result}
+    return {
+        "target": str(install_target),
+        "abaqus": abaqus,
+        "messages": messages,
+        "result": result,
+        # responsive 只代表桥接心跳，仍不能替代一次只读工具调用和模型冒烟测试。
+        "requires_bridge_probe": not bool(result["responsive"]),
+        "requires_read_only_tool_probe": True,
+    }
 
 
 def main(confirmed: bool = False, repair: bool = False) -> int:
@@ -239,4 +286,9 @@ def main(confirmed: bool = False, repair: bool = False) -> int:
     for message in setup_result["messages"]:
         print("- {0}".format(message))
     print("最终状态：{0}".format(setup_result["result"]["message"]))
+    if setup_result["requires_bridge_probe"]:
+        print(
+            "下一步：启动 Abaqus 插件或运行 mcp-headless start，等待桥接心跳。"
+        )
+    print("兼容性确认：心跳通过后，再执行一次只读模型信息探测。")
     return 0

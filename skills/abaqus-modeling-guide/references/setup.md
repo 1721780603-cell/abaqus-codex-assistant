@@ -37,7 +37,8 @@ py -m venv .venv
 ## 处理体检结果
 
 - **没有 Abaqus**：停止自动操作，引导用户从 Dassault Systèmes 官方渠道安装并配置合法许可证。不要替用户下载非官方安装包。
-- **Abaqus 可用、abqpy 缺失或版本不匹配**：根据体检得到的 Abaqus 年份建议对应的 `abqpy==<年份>.*`。展示命令并在安装前征得同意。
+- **检测到 Abaqus 2026**：只报告用户/项目实测兼容未通过，当前自动流程禁用。不要运行 `abqpy-setup --yes`、`mcp-setup`、`mcp-headless start` 或求解；不要猜测故障原因，等待项目修复和重新验证。
+- **Abaqus 2021–2025 可用、abqpy 缺失或版本不匹配**：先展示体检给出的 `abqpy==<年份>.*` 计划。得到同意后运行 `python -m abaqus_codex abqpy-setup --yes`；该命令只安装检测年份，不会失败后改装其他年份。
 - **MCP 缺失**：基础建模仍可继续。只有用户选择 Codex 智能模式时才介绍 `mcp-setup`；说明该命令会下载代码并修改用户级 MCP 配置，获得同意后才能带 `--yes` 执行。
 - **MCP 已配置但离线**：普通建模继续使用 CLI；用户需要 MCP 时再检查 `mcp-headless status`。
 - **GitHub、Zotero 或 ScienceDirect 未就绪**：不影响基础建模。只在用户选择“科研复现全套”或指定单项修复时处理，并遵守 [onboarding.md](onboarding.md) 中的凭据和付费墙安全边界。

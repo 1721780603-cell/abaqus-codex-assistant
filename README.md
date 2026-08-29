@@ -46,7 +46,7 @@
 - 已合法安装并配置许可证的 Abaqus；
 - Python 3.10 或更高版本；
 - Git；
-- 与 Abaqus 大版本匹配的 `abqpy`，例如 Abaqus 2021 使用 `abqpy==2021.*`；
+- Abaqus 2021–2025 使用与年份严格匹配的 `abqpy==<年份>.*`，例如 Abaqus 2024 使用 `abqpy==2024.*`；Abaqus 2026 自动流程当前禁用；
 - Codex 和 Abaqus MCP 仅为智能模式所需。
 - 三维移动载荷示例还需要与 Abaqus 匹配的 Visual Studio 和 Intel Fortran Classic。
 
@@ -70,14 +70,29 @@
 
 ## 快速开始
 
-以下命令在 PowerShell 的项目根目录运行。以 Abaqus 2021 为例：
+以下命令在 PowerShell 的项目根目录运行。先安装项目并进行只读体检，不要在尚未确认 Abaqus 年份时直接安装最新版 abqpy：
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install "abqpy==2021.*"
 .\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m abaqus_codex onboard
 ```
+
+体检显示的 Abaqus 命令路径符合预期、且年份为当前允许继续的 2021–2025 后，再让项目安装同年份的 abqpy。下面的命令会联网修改当前项目 Python，因此只在核对安装计划并同意后使用 `--yes`：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex abqpy-setup --yes
+.\.venv\Scripts\python.exe -m abaqus_codex onboard
+```
+
+安装器始终生成严格年份规格：Abaqus 2021 对应 `abqpy==2021.*`，Abaqus 2024 对应 `abqpy==2024.*`，不会安装不带年份限制的最新版。
+
+当前体检只解析 PATH 或常见目录中找到的第一个可用 Abaqus 命令，并不会枚举所有安装。如果你知道电脑装了多个版本、显示路径与预期不符或检测结果不确定，请不要运行 `abqpy-setup --yes`、配置 MCP 或启动求解；先人工明确本次目标版本和启动命令/安装路径。多版本自动枚举和选择器是后续功能。
+
+实际求解会把这条已检查命令通过 `ABAQUS_BAT_PATH` 交给 abqpy，避免检查和启动落到不同版本。版本、内置 Python 或命令路径任一项无法可靠确认时，求解和后台 MCP 都会停止，不采用猜测值继续。
+
+维护者当前只在 Abaqus 2021 上完成真机全流程验证，Abaqus 2022–2025 属于可检测的候选兼容版本。Abaqus 2026 已在用户/项目实测中出现兼容失败，当前自动流程仅检测版本并给出提示；不得继续运行 `abqpy-setup --yes`、安装或启动 MCP、提交求解。项目修复并重新完成真机验证后，才会重新评估这一限制。详见[版本支持表](docs/version-support.md)。
 
 运行首次启动体检；普通输出适合人阅读，JSON 输出适合 Skill 判断下一步：
 

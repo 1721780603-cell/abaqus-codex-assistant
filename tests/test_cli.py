@@ -10,6 +10,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Dict
+from unittest.mock import patch
 
 from abaqus_codex.cli import main
 
@@ -83,6 +84,39 @@ class ValidateCommandTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         self.assertIn("模型长度必须大于零", error_output.getvalue())
+
+
+class AbqpySetupCommandTests(unittest.TestCase):
+    """确认统一 CLI 会把用户授权原样交给 abqpy 安装器。"""
+
+    @patch("abaqus_codex.abqpy_setup.main", return_value=0)
+    def test_yes_routes_to_abqpy_setup_installer(self, setup_main_mock):
+        """abqpy-setup --yes 应调用安装器，不能误入 MCP 或建模流程。"""
+
+        exit_code = main(["abqpy-setup", "--yes"])
+
+        self.assertEqual(exit_code, 0)
+        setup_main_mock.assert_called_once_with(confirmed=True)
+
+
+class McpHeadlessCommandRoutingTests(unittest.TestCase):
+    """确认 CLI 把启动请求交给负责版本门禁的后台桥接边界。"""
+
+    @patch("abaqus_codex.mcp_headless.print_headless_status")
+    @patch(
+        "abaqus_codex.mcp_headless.start_headless_bridge",
+        return_value={"running": True},
+    )
+    def test_start_delegates_timeout_to_headless_boundary(
+        self, start_mock, print_mock
+    ):
+        """CLI 不重复版本判断，只向受保护的启动函数传递参数。"""
+
+        exit_code = main(["mcp-headless", "start", "--timeout", "7"])
+
+        self.assertEqual(exit_code, 0)
+        start_mock.assert_called_once_with(timeout_seconds=7)
+        print_mock.assert_called_once_with({"running": True})
 
 
 if __name__ == "__main__":

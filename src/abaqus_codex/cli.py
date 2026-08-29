@@ -51,6 +51,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="输出便于 Codex Skill 读取的 JSON，不执行安装或登录。",
     )
 
+    abqpy_parser = subparsers.add_parser(
+        "abqpy-setup", help="按检测到的 Abaqus 年份安装匹配的 abqpy。"
+    )
+    abqpy_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认联网并修改当前项目 Python；不提供时只显示安全提示。",
+    )
+
     mcp_parser = subparsers.add_parser(
         "mcp-setup", help="安装或注册固定版本的 Abaqus MCP。"
     )
@@ -209,6 +218,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             else:
                 print_onboarding_report(result)
             return 0
+
+        if args.command == "abqpy-setup":
+            from abaqus_codex.abqpy_setup import main as abqpy_setup_main
+
+            return abqpy_setup_main(confirmed=args.yes)
 
         if args.command == "mcp-setup":
             from abaqus_codex.mcp_setup import main as mcp_setup_main

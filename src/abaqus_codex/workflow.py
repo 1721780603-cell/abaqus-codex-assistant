@@ -7,6 +7,7 @@ import json
 import importlib.util
 import locale
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -14,7 +15,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from abaqus_codex.abqpy_environment import (
+    is_automation_allowed,
+    is_known_incompatible,
+)
 from abaqus_codex.configuration import load_config, write_json
+from abaqus_codex.environment import inspect_abaqus
 from abaqus_codex.report import write_chinese_report
 from abaqus_codex.user_subroutine import prepare_user_subroutine
 
@@ -97,6 +103,29 @@ def _abaqus_script_for_config(config: Dict[str, object]) -> Path:
     return script_path
 
 
+def _require_automation_abaqus() -> Dict[str, object]:
+    """返回允许自动求解的 Abaqus；检测失败、未知或禁用版本一律停止。"""
+
+    abaqus = inspect_abaqus()
+    if is_known_incompatible(abaqus.get("version")):
+        raise RuntimeError(
+            "Abaqus {0} 已被项目列为已知不兼容，本次求解未启动。".format(
+                abaqus.get("version")
+            )
+        )
+    if not abaqus.get("usable") or not abaqus.get("command"):
+        raise RuntimeError(
+            "没有可靠检测到可用的 Abaqus 版本和内置 Python，本次求解未启动。"
+        )
+    if not is_automation_allowed(abaqus.get("version")):
+        raise RuntimeError(
+            "Abaqus {0} 尚未列入自动求解范围，本次求解未启动。".format(
+                abaqus.get("version")
+            )
+        )
+    return abaqus
+
+
 def run_analysis(
     config_path: Path,
     work_root: Path,
@@ -109,6 +138,7 @@ def run_analysis(
         raise RuntimeError("运行超时秒数必须大于零。")
 
     config = load_config(config_path)
+    abaqus = _require_automation_abaqus()
     abqpy_command_prefix = build_abqpy_command_prefix()
     if abqpy_command_prefix is None:
         raise RuntimeError("没有找到 abqpy，请先运行环境体检并安装匹配版本。")
@@ -139,9 +169,13 @@ def run_analysis(
         command.append(str(user_subroutine_path))
 
     try:
+        # abqpy 官方支持用该环境变量指定 Abaqus 命令，确保检查和启动为同一版本。
+        abaqus_environment = os.environ.copy()
+        abaqus_environment["ABAQUS_BAT_PATH"] = str(abaqus["command"])
         completed = subprocess.run(
             command,
             cwd=work_dir,
+            env=abaqus_environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=timeout_seconds,
