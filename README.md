@@ -16,6 +16,8 @@
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
 - 选择入门、论文复现、科研、生产或教学场景；
 - 检测本机 Ollama 或 LM Studio，并把中文需求转换为受约束的矩形板 JSON；
+- 提供可安装的 Codex Skill，一次一个问题引导新手完成模型；
+- 启动 Abaqus 前单独校验个人模型 JSON；
 - 生成二维平面应力矩形板拉伸模型；
 - 生成带孔边局部网格细化的二维中心圆孔板拉伸模型；
 - 生成左端固定、上边界承受向下均布载荷的二维悬臂梁模型；
@@ -48,6 +50,20 @@
 - 三维移动载荷示例还需要与 Abaqus 匹配的 Visual Studio 和 Intel Fortran Classic。
 
 项目不分发 Abaqus，也不绕过许可证。
+
+## Codex Skill 新手向导
+
+在 Codex 中调用 `$skill-installer`，要求从下面的 GitHub 目录安装 Skill：
+
+<https://github.com/1721780603-cell/abaqus-codex-assistant/tree/main/skills/abaqus-modeling-guide>
+
+安装完成后可以这样开始：
+
+```text
+使用 $abaqus-modeling-guide 带我一步步建立并运行第一个 Abaqus 模型。
+```
+
+向导会先检查项目和软件环境，再一次只询问一组参数。它会把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。
 
 ## 快速开始
 
@@ -112,6 +128,14 @@ py -m venv .venv
 ```
 
 这个命令不会运行 Abaqus。第一版只支持矩形板、mm 和 MPa，详细边界见[本地 AI 入门](docs/local-ai.md)。
+
+在启动 Abaqus 前单独检查任意受支持的配置：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex validate --config .\configs\rectangle_tension.json
+```
+
+命令只读取并规范化 JSON，不占用 Abaqus 许可证。
 
 运行二维矩形板拉伸示例：
 
@@ -216,6 +240,7 @@ abaqus-codex-assistant/
 ├─ configs/                 示例模型配置
 ├─ docs/                    快速开始、架构和边界说明
 ├─ examples/                面向初学者的示例说明
+├─ skills/                  可安装的 Codex 新手建模向导
 ├─ src/abaqus_codex/        主程序与 Abaqus 脚本
 ├─ tests/                   不需要 Abaqus 的离线测试
 ├─ work/                    本机计算文件，不提交

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Abaqus 新手建模向导"
+  short_description: "逐步完成 Abaqus 环境检查、建模、求解和结果解读"
+  default_prompt: "使用 $abaqus-modeling-guide 带我一步步建立并运行第一个 Abaqus 模型。"

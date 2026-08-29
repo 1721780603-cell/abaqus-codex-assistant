@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
-from abaqus_codex.configuration import ConfigurationError
+from abaqus_codex.configuration import ConfigurationError, load_config
 from abaqus_codex.doctor import main as doctor_main
 from abaqus_codex.local_ai import LocalAIError, SUPPORTED_PROVIDERS
 from abaqus_codex.scenario import SCENARIOS, prompt_scenario, save_profile
@@ -136,6 +136,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--yes", action="store_true", help="跳过交互确认，只保存经过校验的 JSON。"
     )
 
+    validate_parser = subparsers.add_parser(
+        "validate", help="检查模型 JSON，不启动 Abaqus。"
+    )
+    validate_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="需要检查的模型 JSON 配置文件。",
+    )
+
     run_parser = subparsers.add_parser(
         "run", help="运行内置 Abaqus 示例并生成中文报告。"
     )
@@ -256,6 +266,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             save_generated_config(output_path, config)
             print("配置已保存：{0}".format(output_path))
             print("本命令不会自动运行 Abaqus；请先人工检查 JSON。")
+            return 0
+
+        if args.command == "validate":
+            # 校验命令只读取 JSON，给初学者提供启动 Abaqus 前的检查点。
+            config_path = args.config.resolve()
+            config = load_config(config_path)
+            print("配置检查通过：{0}".format(config_path))
+            print(json.dumps(config, ensure_ascii=False, indent=2))
+            print("Abaqus 尚未启动；确认参数后再运行 run 命令。")
             return 0
 
         if args.command == "run":

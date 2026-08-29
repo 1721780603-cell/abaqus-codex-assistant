@@ -6,6 +6,9 @@
 
 ### 新增
 
+- 可安装的 `abaqus-modeling-guide` Skill，一次一个问题引导环境检查、建模、校验、求解和结果解读；
+- 不启动 Abaqus 的 `validate --config` 配置检查命令；
+- 2 项命令行校验测试和 2 项 Skill 同步测试，离线测试总数增加到 83 项；
 - 隐藏运行的 `Abaqus cae noGUI` MCP 后台桥接及 start/status/stop 命令；
 - Windows 使用只读进程句柄检查 PID，避免 Python 3.13 的 `os.kill` 兼容异常；
 - 11 项后台桥接和 Windows 进程检查测试，离线测试总数增加到 79 项；
