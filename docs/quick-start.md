@@ -2,15 +2,22 @@
 
 ## 1. 创建隔离环境
 
-不要把开发依赖安装进 Abaqus 2021 自带的 Python 2.7。现代 Python 负责运行主程序，Abaqus 自带 Python 只负责执行建模与后处理脚本。
+不要把开发依赖安装进 Abaqus 自带的 Python。现代 Python 负责运行主程序，Abaqus 自带 Python 只负责执行建模与后处理脚本。
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m pip install "abqpy==2021.*"
+.\.venv\Scripts\python.exe -m abaqus_codex onboard
 ```
 
-如果使用其他 Abaqus 年份，把 `2021` 改成相同的大版本号。
+体检会显示检测到的 Abaqus 年份、内置 Python 和推荐的精确 abqpy 范围。确认结果正确后，再执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex abqpy-setup --yes
+.\.venv\Scripts\python.exe -m abaqus_codex onboard
+```
+
+例如 Abaqus 2022 只会请求 `abqpy==2022.*`，Abaqus 2025 只会请求 `abqpy==2025.*`。命令会联网并修改当前虚拟环境，因此必须显式提供 `--yes`；安装失败时不会回退到其他年份。Abaqus 2026 已知不兼容，只显示检测提示，`abqpy-setup`、MCP 和求解流程都会停止。
 
 ## 2. 检查环境
 

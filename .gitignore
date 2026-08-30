@@ -4,6 +4,8 @@
 # 用户本机的场景选择不提交到公共仓库
 configs/user_profile.json
 configs/local_ai_rectangle.json
+# 新手向导生成的个人模型配置默认只保存在本机
+configs/user_models/
 
 # Python 产生的缓存文件
 __pycache__/
@@ -22,6 +24,7 @@ outputs/*
 !outputs/.gitkeep
 
 # Abaqus 作业文件和大型结果文件
+*.cae
 *.odb
 *.lck
 *.sta
@@ -34,6 +37,14 @@ outputs/*
 *.pac
 *.stt
 *.023
+*.rpy
+*.rpy.*
+abaqus_acis.log
+
+# 本机凭据和环境变量文件不得提交
+.env
+.env.*
+!.env.example
 
 # 编辑器和操作系统临时文件
 .vscode/

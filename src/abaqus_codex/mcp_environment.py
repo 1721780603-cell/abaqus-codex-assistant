@@ -23,7 +23,16 @@ def vendor_python_paths(vendor_path: Path) -> List[Path]:
         vendor_path / "Pythonwin",
         vendor_path / "pywin32_system32",
     ]
-    return [path for path in candidates if path.is_dir()]
+    readable_paths: List[Path] = []
+    for path in candidates:
+        try:
+            if path.is_dir():
+                readable_paths.append(path)
+        except OSError:
+            # 受限运行环境可能看得到父目录，却无权读取某个可选子目录。
+            # 跳过该路径后，启动验证仍可尝试其他 vendor 路径或系统依赖。
+            continue
+    return readable_paths
 
 
 def _decode_output(data: bytes) -> str:

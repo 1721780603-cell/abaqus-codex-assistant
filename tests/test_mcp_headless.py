@@ -131,8 +131,11 @@ class HeadlessLifecycleTests(unittest.TestCase):
                 start_headless_bridge(home, timeout_seconds=1)
 
     @patch("abaqus_codex.mcp_headless.subprocess.Popen")
+    @patch("abaqus_codex.mcp_headless.inspect_abaqus_command")
     @patch("abaqus_codex.mcp_headless.inspect_headless_bridge")
-    def test_start_waits_for_real_heartbeat(self, inspect_mock, popen_mock):
+    def test_start_waits_for_real_heartbeat(
+        self, inspect_mock, inspect_command_mock, popen_mock
+    ):
         """只有后台进程和插件心跳都在线时才报告启动成功。"""
 
         online = offline_result()
@@ -152,6 +155,10 @@ class HeadlessLifecycleTests(unittest.TestCase):
         process = Mock(pid=4321)
         process.poll.return_value = None
         popen_mock.return_value = process
+        inspect_command_mock.return_value = {
+            "usable": True,
+            "version": "2025",
+        }
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             plugin = home / "abaqus_mcp_plugin.py"
@@ -163,6 +170,65 @@ class HeadlessLifecycleTests(unittest.TestCase):
             )
         self.assertTrue(result["running"])
         self.assertEqual(popen_mock.call_count, 1)
+        inspect_command_mock.assert_called_once_with(command.resolve())
+
+    @patch("abaqus_codex.mcp_headless.subprocess.Popen")
+    @patch("abaqus_codex.mcp_headless._write_managed_script")
+    @patch("abaqus_codex.mcp_headless.inspect_abaqus_command")
+    @patch("abaqus_codex.mcp_headless.inspect_headless_bridge")
+    def test_direct_2026_command_is_rejected_before_script_or_process(
+        self, inspect_mock, inspect_command_mock, write_mock, popen_mock
+    ):
+        """显式传入 2026 命令也不能绕过后台桥接的副作用边界。"""
+
+        inspect_mock.return_value = offline_result()
+        inspect_command_mock.return_value = {
+            "usable": True,
+            "version": "2026",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            command = home / "abq2026.bat"
+            (home / "abaqus_mcp_plugin.py").write_text(
+                "# plugin", encoding="utf-8"
+            )
+            command.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(McpHeadlessError, "2026.*已知不兼容"):
+                start_headless_bridge(home, abaqus_command=command)
+
+        inspect_command_mock.assert_called_once_with(command.resolve())
+        write_mock.assert_not_called()
+        popen_mock.assert_not_called()
+
+    @patch("abaqus_codex.mcp_headless.subprocess.Popen")
+    @patch("abaqus_codex.mcp_headless._write_managed_script")
+    @patch("abaqus_codex.mcp_headless.inspect_abaqus_command")
+    @patch("abaqus_codex.mcp_headless.inspect_headless_bridge")
+    def test_direct_unknown_command_is_rejected_before_script_or_process(
+        self, inspect_mock, inspect_command_mock, write_mock, popen_mock
+    ):
+        """版本未知或不可用时必须失败关闭，不能写脚本或启动进程。"""
+
+        inspect_mock.return_value = offline_result()
+        inspect_command_mock.return_value = {
+            "usable": False,
+            "version": None,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            command = home / "abaqus.bat"
+            (home / "abaqus_mcp_plugin.py").write_text(
+                "# plugin", encoding="utf-8"
+            )
+            command.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(McpHeadlessError, "无法可靠读取"):
+                start_headless_bridge(home, abaqus_command=command)
+
+        inspect_command_mock.assert_called_once_with(command.resolve())
+        write_mock.assert_not_called()
+        popen_mock.assert_not_called()
 
     @patch("abaqus_codex.mcp_headless.inspect_headless_bridge")
     def test_stop_without_managed_launcher_is_noop(self, inspect_mock):

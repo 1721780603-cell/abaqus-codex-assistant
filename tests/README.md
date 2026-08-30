@@ -5,3 +5,5 @@
 测试时应尽量避免每次都启动真实 Abaqus 求解，以减少运行时间和许可证占用。
 
 普通测试只使用 Python 标准库，不要求 GitHub CI 安装 Abaqus。真实 Abaqus 端到端测试由有许可证的本机单独完成。
+
+首次启动向导测试会模拟 GitHub CLI、Zotero 回环端点和 ScienceDirect 人工登录状态，不连接真实账号、网络服务或浏览器会话。

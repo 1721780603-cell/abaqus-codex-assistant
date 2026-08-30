@@ -1,0 +1,699 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/1721780603-cell/abaqus-codex-assistant/schemas/action_schema_v1.json",
+  "title": "Abaqus 中文建模助手 Action Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "abaqus_release",
+    "plan_id",
+    "created_at",
+    "expires_at",
+    "model_name",
+    "model_fingerprint",
+    "unit_system",
+    "actions",
+    "warnings",
+    "requires_backup",
+    "requires_job_confirmation",
+    "plan_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "abaqus.action.v1"
+    },
+    "abaqus_release": {
+      "const": "2021"
+    },
+    "plan_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model_name": {
+      "$ref": "#/$defs/objectName"
+    },
+    "model_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "unit_system": {
+      "const": "mm-N-s-MPa"
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/getModelSummaryAction" },
+          { "$ref": "#/$defs/setMaterialElasticAction" },
+          { "$ref": "#/$defs/createRectanglePartAction" },
+          { "$ref": "#/$defs/createSectionAssignmentAction" },
+          { "$ref": "#/$defs/createInstanceAction" },
+          { "$ref": "#/$defs/setPartParameterAction" },
+          { "$ref": "#/$defs/setMeshSizeAction" },
+          { "$ref": "#/$defs/createStaticStepAction" },
+          { "$ref": "#/$defs/createDisplacementBcAction" },
+          { "$ref": "#/$defs/configureRectangleTensionBcsAction" },
+          { "$ref": "#/$defs/saveCaeAsAction" },
+          { "$ref": "#/$defs/submitJobAction" },
+          { "$ref": "#/$defs/createSubmitJobAction" },
+          { "$ref": "#/$defs/readJobResultsReportAction" }
+        ]
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/warnings"
+    },
+    "requires_backup": {
+      "type": "boolean"
+    },
+    "requires_job_confirmation": {
+      "type": "boolean"
+    },
+    "plan_digest": {
+      "$ref": "#/$defs/fingerprint"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "objectName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(?!\\s)(?!.*\\s$)[^\\u0000-\\u001f\\u007f\\\\/:*?\"<>|]+$"
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "pattern": "^(?!\\s)(?!.*\\s$)[^\\u0000-\\u001f\\u007f]+$"
+      }
+    },
+    "elasticValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["youngs_modulus", "poisson_ratio", "stress_unit"],
+      "properties": {
+        "youngs_modulus": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000000.0
+        },
+        "poisson_ratio": {
+          "type": "number",
+          "exclusiveMinimum": -1,
+          "exclusiveMaximum": 0.5
+        },
+        "stress_unit": {
+          "const": "MPa"
+        }
+      }
+    },
+    "lengthValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "length_unit"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000.0
+        },
+        "length_unit": {
+          "const": "mm"
+        }
+      }
+    },
+    "meshValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "length_unit"],
+      "properties": {
+        "size": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000.0
+        },
+        "length_unit": {
+          "const": "mm"
+        }
+      }
+    },
+    "actionBase": {
+      "type": "object",
+      "required": ["id", "type", "target", "before", "after", "risk", "warnings"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "type": {
+          "type": "string"
+        },
+        "target": {
+          "type": "object"
+        },
+        "before": {},
+        "after": {},
+        "risk": {
+          "enum": ["read_only", "low", "medium", "high"]
+        },
+        "warnings": {
+          "$ref": "#/$defs/warnings"
+        }
+      }
+    },
+    "getModelSummaryAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "get_model_summary" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": { "type": "null" },
+            "risk": { "const": "read_only" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "setMaterialElasticAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "set_material_elastic" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "material"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "material": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/$defs/elasticValues" }
+              ]
+            },
+            "after": { "$ref": "#/$defs/elasticValues" },
+            "risk": { "const": "low" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createRectanglePartAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_rectangle_part" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "part"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "part": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model_exists", "part_exists"],
+              "properties": {
+                "model_exists": { "type": "boolean" },
+                "part_exists": { "const": false }
+              }
+            },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["length", "width", "length_unit", "dimensionality", "part_type", "origin"],
+              "properties": {
+                "length": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000.0 },
+                "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000.0 },
+                "length_unit": { "const": "mm" },
+                "dimensionality": { "const": "TWO_D_PLANAR" },
+                "part_type": { "const": "DEFORMABLE_BODY" },
+                "origin": { "const": "lower_left_0_0" }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createSectionAssignmentAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_section_assignment" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "part", "section", "material"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "part": { "$ref": "#/$defs/objectName" },
+                "section": { "$ref": "#/$defs/objectName" },
+                "material": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["thickness", "length_unit", "section_type", "region"],
+              "properties": {
+                "thickness": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000.0 },
+                "length_unit": { "const": "mm" },
+                "section_type": { "const": "HOMOGENEOUS_SOLID" },
+                "region": { "const": "ALL_FACES" }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createInstanceAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_instance" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "part", "instance"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "part": { "$ref": "#/$defs/objectName" },
+                "instance": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["dependent", "coordinate_system"],
+              "properties": {
+                "dependent": { "const": true },
+                "coordinate_system": { "const": "CARTESIAN" }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "setPartParameterAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "set_part_parameter" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "part", "parameter"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "part": { "$ref": "#/$defs/objectName" },
+                "parameter": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "$ref": "#/$defs/lengthValue" },
+            "after": { "$ref": "#/$defs/lengthValue" },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "setMeshSizeAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "set_mesh_size" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "part"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "part": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["seed_size", "has_mesh"],
+              "properties": {
+                "seed_size": {
+                  "oneOf": [
+                    { "type": "null" },
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000.0
+                    }
+                  ]
+                },
+                "has_mesh": { "const": false }
+              }
+            },
+            "after": { "$ref": "#/$defs/meshValue" },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createStaticStepAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_static_step" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "step"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "step": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "previous_step",
+                "time_period",
+                "nlgeom"
+              ],
+              "properties": {
+                "previous_step": { "$ref": "#/$defs/objectName" },
+                "time_period": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "nlgeom": { "type": "boolean" }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createDisplacementBcAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_displacement_bc" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "bc", "region_type", "region_owner", "region_name"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "bc": { "$ref": "#/$defs/objectName" },
+                "region_type": { "const": "set" },
+                "region_owner": { "const": "assembly" },
+                "region_name": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["step", "u1", "u2"],
+              "properties": {
+                "step": { "$ref": "#/$defs/objectName" },
+                "u1": {
+                  "type": ["number", "null"],
+                  "minimum": -1000000000.0,
+                  "maximum": 1000000000.0
+                },
+                "u2": {
+                  "type": ["number", "null"],
+                  "minimum": -1000000000.0,
+                  "maximum": 1000000000.0
+                }
+              },
+              "anyOf": [
+                { "properties": { "u1": { "type": "number" } } },
+                { "properties": { "u2": { "type": "number" } } }
+              ]
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "configureRectangleTensionBcsAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "configure_rectangle_tension_bcs" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "instance", "step"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "instance": { "$ref": "#/$defs/objectName" },
+                "step": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["right_displacement", "length_unit", "selection_strategy", "bc_names"],
+              "properties": {
+                "right_displacement": {
+                  "type": "number",
+                  "not": { "const": 0 },
+                  "minimum": -1000000000.0,
+                  "maximum": 1000000000.0
+                },
+                "length_unit": { "const": "mm" },
+                "selection_strategy": { "const": "RECTANGLE_BOUNDING_BOX" },
+                "bc_names": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["left_horizontal", "anchor_vertical", "right_tension"],
+                  "properties": {
+                    "left_horizontal": { "$ref": "#/$defs/objectName" },
+                    "anchor_vertical": { "$ref": "#/$defs/objectName" },
+                    "right_tension": { "$ref": "#/$defs/objectName" }
+                  }
+                }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "saveCaeAsAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "save_cae_as" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["destination_mode", "overwrite"],
+              "properties": {
+                "destination_mode": { "const": "prompt_user" },
+                "overwrite": { "const": false }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "submitJobAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "submit_job" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "job"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "job": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["CREATED", "CHECK_COMPLETED", "NONE"] }
+              }
+            },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["submit", "consistency_checking", "wait", "auto_retry"],
+              "properties": {
+                "submit": { "const": true },
+                "consistency_checking": { "const": true },
+                "wait": { "const": false },
+                "auto_retry": { "const": false }
+              }
+            },
+            "risk": { "const": "high" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "createSubmitJobAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "create_submit_job" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "job"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "job": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["job_exists"],
+              "properties": { "job_exists": { "const": false } }
+            },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["num_cpus", "submit", "consistency_checking", "wait", "auto_retry"],
+              "properties": {
+                "num_cpus": { "type": "integer", "minimum": 1, "maximum": 64 },
+                "submit": { "const": true },
+                "consistency_checking": { "const": true },
+                "wait": { "const": false },
+                "auto_retry": { "const": false }
+              }
+            },
+            "risk": { "const": "high" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "readJobResultsReportAction": {
+      "allOf": [
+        { "$ref": "#/$defs/actionBase" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "read_job_results_report" },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "job"],
+              "properties": {
+                "model": { "$ref": "#/$defs/objectName" },
+                "job": { "$ref": "#/$defs/objectName" }
+              }
+            },
+            "before": { "type": "null" },
+            "after": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["odb_source", "report_format", "report_language", "overwrite"],
+              "properties": {
+                "odb_source": { "const": "CURRENT_CAE_JOB_DIRECTORY" },
+                "report_format": { "const": "markdown" },
+                "report_language": { "const": "zh-CN" },
+                "overwrite": { "const": false }
+              }
+            },
+            "risk": { "const": "medium" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

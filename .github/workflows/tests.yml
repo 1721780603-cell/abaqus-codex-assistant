@@ -34,7 +34,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: 安装项目
-        run: python -m pip install -e .
+        run: python -m pip install -e ".[test]"
 
       - name: 检查 Python 语法
         run: python -m compileall -q src tests

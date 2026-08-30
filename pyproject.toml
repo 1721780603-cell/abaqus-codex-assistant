@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Abaqus Codex Assistant Contributors" },
+    { name = "1721780603-cell and Abaqus Codex Assistant contributors" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -22,6 +22,9 @@ classifiers = [
 [project.scripts]
 abaqus-codex = "abaqus_codex.cli:main"
 
+[project.gui-scripts]
+abaqus-codex-assistant = "abaqus_codex.desktop_assistant:main"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 
@@ -29,4 +32,10 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-abaqus_codex = ["user_subroutines/*.for.in"]
+abaqus_codex = [
+    "user_subroutines/*.for.in",
+    "assistant_protocol/*.json",
+]
+
+[project.optional-dependencies]
+test = ["jsonschema>=4.18,<5"]

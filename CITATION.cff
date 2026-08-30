@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "如果你在论文、教学或项目中使用本软件，请引用原始项目并注明实际版本。"
+title: "Abaqus Codex Assistant"
+type: software
+authors:
+  - family-names: "1721780603-cell"
+version: "0.1.0-alpha"
+date-released: 2026-08-10
+license: MIT
+repository-code: "https://github.com/1721780603-cell/abaqus-codex-assistant"
+url: "https://github.com/1721780603-cell/abaqus-codex-assistant"
+abstract: >-
+  面向 Abaqus 初学者的环境检测、受控建模、求解、结果读取与中文报告工具。

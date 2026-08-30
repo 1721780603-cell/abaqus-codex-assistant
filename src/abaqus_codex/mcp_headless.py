@@ -10,7 +10,14 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from abaqus_codex.environment import find_abaqus_command
+from abaqus_codex.abqpy_environment import (
+    is_automation_allowed,
+    is_known_incompatible,
+)
+from abaqus_codex.environment import (
+    find_abaqus_command,
+    inspect_abaqus_command,
+)
 from abaqus_codex.mcp_guard import inspect_bridge_status, process_is_running
 
 
@@ -147,9 +154,27 @@ def start_headless_bridge(
             "已有 Abaqus MCP 桥接在线；请先停止 CAE 中的 MCP，再启动后台模式。"
         )
 
-    command = (abaqus_command or find_abaqus_command())
+    command = abaqus_command or find_abaqus_command()
     if command is None or not Path(command).is_file():
         raise McpHeadlessError("没有找到 Abaqus 启动命令。")
+    command = Path(command).resolve()
+    abaqus = inspect_abaqus_command(command)
+    if is_known_incompatible(abaqus.get("version")):
+        raise McpHeadlessError(
+            "Abaqus {0} 已被项目列为已知不兼容，后台桥接未启动。".format(
+                abaqus.get("version")
+            )
+        )
+    if not abaqus.get("usable"):
+        raise McpHeadlessError(
+            "无法可靠读取该 Abaqus 的版本和内置 Python，后台桥接未启动。"
+        )
+    if not is_automation_allowed(abaqus.get("version")):
+        raise McpHeadlessError(
+            "Abaqus {0} 尚未列入自动 MCP 流程，后台桥接未启动。".format(
+                abaqus.get("version")
+            )
+        )
     script = _write_managed_script(root)
     stop_file = root / "stop.flag"
     if stop_file.exists():

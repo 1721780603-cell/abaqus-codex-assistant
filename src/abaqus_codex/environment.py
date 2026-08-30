@@ -166,20 +166,10 @@ def query_abaqus_python(
     return completed.returncode, _decode_output(completed.stdout)
 
 
-def inspect_abaqus() -> Dict[str, object]:
-    """完成一次 Abaqus 检测，并返回便于后续使用的结构化结果。"""
+def inspect_abaqus_command(command: Path) -> Dict[str, object]:
+    """检查一条明确的 Abaqus 命令，避免检测和实际启动指向不同版本。"""
 
-    command = find_abaqus_command()
-    if command is None:
-        return {
-            "installed": False,
-            "usable": False,
-            "command": None,
-            "version": None,
-            "python_version": None,
-            "python_executable": None,
-            "message": "没有找到 Abaqus 启动命令。",
-        }
+    command = Path(command).resolve()
 
     try:
         return_code, output = query_abaqus_release(command)
@@ -265,6 +255,23 @@ def inspect_abaqus() -> Dict[str, object]:
         "python_executable": python_executable,
         "message": message,
     }
+
+
+def inspect_abaqus() -> Dict[str, object]:
+    """查找默认 Abaqus 命令，再使用同一套规则读取版本和内置 Python。"""
+
+    command = find_abaqus_command()
+    if command is None:
+        return {
+            "installed": False,
+            "usable": False,
+            "command": None,
+            "version": None,
+            "python_version": None,
+            "python_executable": None,
+            "message": "没有找到 Abaqus 启动命令。",
+        }
+    return inspect_abaqus_command(command)
 
 
 def main() -> int:

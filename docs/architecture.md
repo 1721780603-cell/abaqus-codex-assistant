@@ -38,6 +38,15 @@ Python 3 生成中文 report.md
 - `mcp_guard.py`：工具调用前检查心跳与进程，桥接离线时快速返回；
 - `mcp_headless.py`：隐藏启动、检查和优雅停止独立 Abaqus noGUI 桥接；
 - `mcp_setup.py`：经明确确认后的固定版本安装和防卡注册修复；
+- `abaqus_plugins/readonly_model_snapshot/`：Abaqus 2021 用户点击后只运行一次的 Kernel 名称快照；
+- `abaqus_plugins/safe_material_action/`：GUI 事件循环轮询与 Kernel 单材料白名单执行器；
+- `desktop_assistant/snapshot_source.py`：默认读取并严格验证静态快照，不向 Abaqus 发送命令；
+- `desktop_assistant/bridge.py`：显式 MCP 兼容模式，只发送 `ping` 和 `get_model_info`；
+- `desktop_assistant/snapshot.py`：裁剪模型概要、移除完整路径并计算只读指纹；
+- `desktop_assistant/controller.py`：不依赖 Tk 的中文输入和连接状态逻辑；
+- `desktop_assistant/material_flow.py`：固定中文句式、实时旧值和可审阅 Action Plan；
+- `desktop_assistant/safe_action_bridge.py`：只发送材料读取或已批准材料计划；
+- `desktop_assistant/app.py`：Python 3 Tkinter 伴随窗口，后台读取、主线程更新界面；
 - `doctor.py`：综合体检；
 - `configuration.py`：输入校验；
 - `local_ai.py`：只通过本机回环地址读取模型并生成受约束的矩形板参数；
@@ -56,6 +65,8 @@ Python 3 生成中文 report.md
 ## 为什么分成两个 Python 环境
 
 Abaqus 2021 自带 Python 2.7，现代开发工具通常使用 Python 3。主程序使用 Python 3 进行输入校验、命令编排和报告生成；真正的 Abaqus API 脚本保持 Python 2.7 兼容。这样既能获得现代开发体验，又不修改 Abaqus 安装目录。
+
+桌面助手也遵循这一边界：Python 3 负责中文句式、计划和确认；Abaqus 2021 Kernel 只执行固定材料动作。GUI 插件在 FOX 主事件循环中领取请求，并用固定 `sendCommand` 调用 Kernel，不在后台线程中访问 `mdb`。MCP 仅保留为显式兼容模式；无界面后台桥接属于另一个 Abaqus 会话，不能修改用户当前 GUI 中打开的模型。
 
 ## 结果可追溯性
 

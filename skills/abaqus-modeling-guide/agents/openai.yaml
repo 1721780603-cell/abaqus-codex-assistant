@@ -1,0 +1,4 @@
+interface:
+  display_name: "Abaqus 新手建模向导"
+  short_description: "首次体检后逐步完成 Abaqus 建模与科研连接"
+  default_prompt: "使用 $abaqus-modeling-guide 先完成首次启动体检，再带我一步步建立第一个 Abaqus 模型。"

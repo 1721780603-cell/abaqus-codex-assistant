@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
-from abaqus_codex.configuration import ConfigurationError
+from abaqus_codex.configuration import ConfigurationError, load_config
 from abaqus_codex.doctor import main as doctor_main
 from abaqus_codex.local_ai import LocalAIError, SUPPORTED_PROVIDERS
 from abaqus_codex.scenario import SCENARIOS, prompt_scenario, save_profile
@@ -41,6 +41,59 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("doctor", help="检查 Abaqus、abqpy 和 Abaqus MCP。")
+
+    assistant_parser = subparsers.add_parser(
+        "assistant", help="启动 Abaqus 2021 中文材料计划与安全修改助手。"
+    )
+    assistant_parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="显式使用模拟模型，不连接或冒充真实 Abaqus。",
+    )
+    assistant_parser.add_argument(
+        "--source",
+        choices=("snapshot", "mcp", "mock"),
+        default=None,
+        help="模型概要来源；默认读取一次性快照，MCP 仅为显式兼容模式。",
+    )
+    assistant_parser.add_argument(
+        "--mcp-home",
+        type=Path,
+        help="高级选项：指定已有 Abaqus MCP 工作目录。",
+    )
+
+    assistant_setup_parser = subparsers.add_parser(
+        "assistant-setup",
+        help="检查或安装 Abaqus 2021 安全材料动作插件。",
+    )
+    assistant_setup_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只做版本和文件预检，不写入用户插件目录。",
+    )
+    assistant_setup_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认安装到当前用户的 abaqus_plugins；不同旧版会先备份。",
+    )
+
+    onboard_parser = subparsers.add_parser(
+        "onboard", help="首次启动时检查建模、GitHub、Zotero 和科研访问。"
+    )
+    onboard_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="输出便于 Codex Skill 读取的 JSON，不执行安装或登录。",
+    )
+
+    abqpy_parser = subparsers.add_parser(
+        "abqpy-setup", help="按检测到的 Abaqus 年份安装匹配的 abqpy。"
+    )
+    abqpy_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认联网并修改当前项目 Python；不提供时只显示安全提示。",
+    )
 
     mcp_parser = subparsers.add_parser(
         "mcp-setup", help="安装或注册固定版本的 Abaqus MCP。"
@@ -136,6 +189,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--yes", action="store_true", help="跳过交互确认，只保存经过校验的 JSON。"
     )
 
+    validate_parser = subparsers.add_parser(
+        "validate", help="检查模型 JSON，不启动 Abaqus。"
+    )
+    validate_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="需要检查的模型 JSON 配置文件。",
+    )
+
     run_parser = subparsers.add_parser(
         "run", help="运行内置 Abaqus 示例并生成中文报告。"
     )
@@ -176,6 +239,55 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if args.command == "doctor":
             return doctor_main()
+
+        if args.command == "assistant":
+            # 延后导入 Tkinter，普通命令和无图形 CI 不会加载桌面界面。
+            from abaqus_codex.desktop_assistant import launch
+
+            source = "mock" if args.mock else (args.source or "snapshot")
+            if args.mock and args.source is not None:
+                parser.error("--mock 不能与显式 --source 同时使用。")
+            if args.mcp_home is not None and source != "mcp":
+                parser.error("--mcp-home 只能与 --source mcp 一起使用。")
+            return launch(
+                mock=(source == "mock"),
+                source=source,
+                mcp_home=args.mcp_home,
+            )
+
+        if args.command == "assistant-setup":
+            from abaqus_codex.safe_action_setup import setup_safe_action_plugin
+
+            result = setup_safe_action_plugin(
+                confirmed=args.yes,
+                dry_run=args.dry_run,
+            )
+            print(result["message"])
+            print("目标目录：{0}".format(result["target"]))
+            if result["backup"]:
+                print("旧版备份：{0}".format(result["backup"]))
+            if not result["dry_run"] and result["changed"]:
+                print("请关闭并重新打开 Abaqus/CAE 2021 后再使用助手。")
+            return 0
+
+        if args.command == "onboard":
+            from abaqus_codex.onboarding import (
+                inspect_onboarding,
+                print_onboarding_report,
+            )
+
+            # 首次启动体检只读状态；缺项是正常结果，不把它当成命令失败。
+            result = inspect_onboarding()
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print_onboarding_report(result)
+            return 0
+
+        if args.command == "abqpy-setup":
+            from abaqus_codex.abqpy_setup import main as abqpy_setup_main
+
+            return abqpy_setup_main(confirmed=args.yes)
 
         if args.command == "mcp-setup":
             from abaqus_codex.mcp_setup import main as mcp_setup_main
@@ -256,6 +368,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             save_generated_config(output_path, config)
             print("配置已保存：{0}".format(output_path))
             print("本命令不会自动运行 Abaqus；请先人工检查 JSON。")
+            return 0
+
+        if args.command == "validate":
+            # 校验命令只读取 JSON，给初学者提供启动 Abaqus 前的检查点。
+            config_path = args.config.resolve()
+            config = load_config(config_path)
+            print("配置检查通过：{0}".format(config_path))
+            print(json.dumps(config, ensure_ascii=False, indent=2))
+            print("Abaqus 尚未启动；确认参数后再运行 run 命令。")
             return 0
 
         if args.command == "run":
