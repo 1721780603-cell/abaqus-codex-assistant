@@ -1,4 +1,30 @@
-# Windows 统一安装向导 v1
+# Windows 安装与单文件 Setup
+
+## 推荐给普通用户：双击单文件 Setup
+
+普通用户只需要从 GitHub Release 下载 `AbaqusCodexAssistant-Setup-<版本>-x64.exe`，双击并按向导完成安装。该 Setup 已内置官方 Python 3.12.10 x64 完整运行时，不要求用户预装 Python，也不会在安装时下载 Python 或项目代码。它会：
+
+- 按当前用户安装到 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，不要求管理员权限；
+- 安装并创建 `AbaqusCodexAssistant.exe` 的开始菜单和可选桌面快捷方式，之后直接双击应用使用；
+- 首次安装调用 `integration-setup --yes`，只为当前用户安装或修复本项目拥有的 Skill 与受支持的 Abaqus 集成；
+- 从“设置 → 应用”正常卸载，卸载前调用 `integration-remove --yes` 清理本项目拥有的集成；
+- 保留 `%LOCALAPPDATA%\AbaqusCodexAssistant` 中的用户历史、快照和模型工作数据。
+
+Setup 不包含 Abaqus、Codex、许可证、账号、Cookie、API Key 或论文数据库会话。需要 AI 对话时，用户仍须自行安装并登录 Codex；需要真实求解时，仍须自行合法安装 Abaqus 并拥有可用许可证。未购买代码签名证书前，Windows 可能显示“未知发布者”，请只从本项目官方 Release 下载，并用同页 `.sha256` 文件校验。
+
+## 维护者：构建单文件 Setup
+
+构建机需要 Windows、Inno Setup 6.7.3 和官方 Python 3.12.10 full amd64 ZIP。构建脚本固定校验 Python ZIP 与 Inno 编译器的 SHA256，并验证 Inno 的 Pyrsys B.V. 数字签名，不接受被替换的构建工具或运行时：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\build_windows_setup.ps1 `
+  -PythonArchive C:\path\python-3.12.10-amd64.zip `
+  -InnoCompiler "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+```
+
+省略 `-PythonArchive` 时，只有维护者构建过程会从 python.org 下载固定版本并校验 SHA256；终端用户运行生成的 Setup 时不会联网下载运行时。省略 `-InnoCompiler` 时会检查 `INNO_ISCC` 和 Inno Setup 6 的标准安装位置。输出位于 `build\windows-setup\output`，且只包含一个 x64 Setup 与对应的 `.sha256` 文件。构建脚本只会清理 `build\windows-setup` 下的专用 staging/output 目录。
+
+## 源码 PowerShell 安装（兼容路径）
 
 该向导先把同一个 GitHub Release 中的桌面助手安装到 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，并安装 Codex Skill，然后才检测 Abaqus。没有安装 Abaqus 也不会阻止核心程序安装；当前仅在检测到可用的 Abaqus 2021 后自动安装已验证的安全修改插件。历史、快照和动作队列继续保存在独立的数据目录 `%LOCALAPPDATA%\AbaqusCodexAssistant`。安装器不包含 Abaqus、Codex、许可证、账号、Cookie、API Key 或论文数据库会话。
 
@@ -53,7 +79,7 @@ powershell -ExecutionPolicy Bypass -File .\installer\uninstall.ps1
 
 - 核心程序和 Skill 先安装，随后才只读检测 Abaqus；未检测到 Abaqus 时保留核心安装并给出配置提示；
 - 维护者只在 Abaqus 2021 上完成安全修改插件的真机验证；其他版本先安装核心助手和 Skill，但不会自动启用模型修改；
-- v1 不内置 Python 运行时；后续正式 EXE 再评估自包含运行时；
+- 源码 PowerShell 安装路径不内置 Python；推荐的单文件 Setup 已内置 Python 3.12.10 x64 运行时；
 - MCP、abqpy 需要联网，所以必须由用户主动选择；
 - Abaqus 2021 安装了安全插件后必须重启 Abaqus/CAE 和 Codex；
 - 未购买代码签名证书前，Windows 可能显示未知发布者提示。

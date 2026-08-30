@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import importlib
 import subprocess
-import sys
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Optional
 
 from abaqus_codex.abqpy_environment import (
     inspect_abqpy,
@@ -13,24 +14,42 @@ from abaqus_codex.abqpy_environment import (
     recommended_abqpy_requirement,
 )
 from abaqus_codex.environment import inspect_abaqus
+from abaqus_codex.paths import (
+    activate_user_python_packages,
+    project_python_executable,
+)
 
 
 class AbqpySetupError(RuntimeError):
     """表示 abqpy 安装计划或安装验证没有安全完成。"""
 
 
-def build_install_command(requirement: str) -> List[str]:
+def build_install_command(
+    requirement: str, target: Optional[Path] = None
+) -> List[str]:
     """构造固定参数列表，确保依赖安装到当前项目 Python。"""
 
-    return [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "--disable-pip-version-check",
-        "--upgrade",
-        requirement,
+    command = [
+        str(project_python_executable()),
     ]
+    # 安装版使用受 Setup 管理的私有 Python；可选包的 pip
+    # 子进程也必须忽略用户级 site-packages 和 PYTHON* 环境变量。
+    # 源码模式 target=None 时保持原有命令行语义。
+    if target is not None:
+        command.append("-I")
+    command.extend(
+        [
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--upgrade",
+        ]
+    )
+    if target is not None:
+        command.extend(["--target", str(target)])
+    command.append(requirement)
+    return command
 
 
 def _run_install(command: List[str], timeout_seconds: int = 600) -> None:
@@ -83,6 +102,7 @@ def setup_abqpy(confirmed: bool) -> Dict[str, object]:
             "无法从 Abaqus 版本生成安全的 abqpy 年份规格，未执行安装。"
         )
 
+    package_target = activate_user_python_packages(create=True)
     before = inspect_abqpy(abaqus["version"])
     if before["usable"]:
         return {
@@ -93,8 +113,9 @@ def setup_abqpy(confirmed: bool) -> Dict[str, object]:
             "message": "匹配年份的 abqpy 已可用，未重复安装。",
         }
 
-    command = build_install_command(requirement)
+    command = build_install_command(requirement, target=package_target)
     _run_install(command)
+    importlib.invalidate_caches()
     after = inspect_abqpy(abaqus["version"])
     if not after["usable"]:
         raise AbqpySetupError(

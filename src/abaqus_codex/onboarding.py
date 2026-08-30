@@ -7,7 +7,6 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, Optional
 from urllib.error import HTTPError, URLError
@@ -19,6 +18,7 @@ from abaqus_codex.abqpy_environment import (
     recommended_abqpy_requirement,
 )
 from abaqus_codex.doctor import inspect_environment
+from abaqus_codex.paths import project_python_executable
 
 
 ZOTERO_BASE_URL = "http://127.0.0.1:23119"
@@ -308,7 +308,7 @@ def inspect_onboarding() -> Dict[str, object]:
     project_python = {
         "usable": True,
         "version": platform.python_version(),
-        "executable": sys.executable,
+        "executable": str(project_python_executable()),
         "message": "项目 Python 可以运行当前体检。",
     }
 

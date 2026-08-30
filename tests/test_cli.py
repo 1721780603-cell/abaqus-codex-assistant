@@ -119,5 +119,76 @@ class McpHeadlessCommandRoutingTests(unittest.TestCase):
         print_mock.assert_called_once_with({"running": True})
 
 
+class DistributionIntegrationCommandTests(unittest.TestCase):
+    """确认自包含安装器只通过固定的用户集成边界写入。"""
+
+    @patch("abaqus_codex.distribution_integration.integration_setup")
+    def test_setup_forwards_confirmation_and_custom_codex_home(self, setup_mock):
+        setup_mock.return_value = {
+            "skill": {"target": "C:/Codex/skills/abaqus-modeling-guide"},
+            "plugin": {"message": "已跳过。"},
+            "manifest_path": "C:/Data/integration-manifest.json",
+            "dry_run": False,
+        }
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(
+                [
+                    "integration-setup",
+                    "--yes",
+                    "--codex-home",
+                    "C:/Codex",
+                    "--data-root",
+                    "C:/Data",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        setup_mock.assert_called_once_with(
+            confirmed=True,
+            codex_home_path=Path("C:/Codex"),
+            data_root=Path("C:/Data"),
+            dry_run=False,
+        )
+        self.assertIn("用户集成清单", output.getvalue())
+
+    @patch("abaqus_codex.distribution_integration.integration_remove")
+    def test_remove_requires_explicit_yes_and_reports_recoverable_status(
+        self, remove_mock
+    ):
+        remove_mock.return_value = {
+            "skill": {"status": "restored_backup"},
+            "plugin": {"status": "not_managed"},
+        }
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(["integration-remove", "--yes"])
+
+        self.assertEqual(exit_code, 0)
+        remove_mock.assert_called_once_with(confirmed=True, data_root=None)
+        self.assertIn("restored_backup", output.getvalue())
+
+    @patch("abaqus_codex.distribution_integration.integration_remove")
+    @patch("abaqus_codex.cli.resource_root", side_effect=RuntimeError("资源损坏"))
+    def test_remove_still_runs_when_installed_resources_are_damaged(
+        self, resource_root_mock, remove_mock
+    ):
+        """卸载清理不能因只读发布资源缺失而连参数都无法解析。"""
+
+        remove_mock.return_value = {
+            "skill": {"status": "moved_to_recovery"},
+            "plugin": {"status": "not_managed"},
+        }
+        exit_code = main(
+            ["integration-remove", "--yes", "--data-root", "C:/Data"]
+        )
+
+        self.assertEqual(exit_code, 0)
+        resource_root_mock.assert_not_called()
+        remove_mock.assert_called_once_with(
+            confirmed=True, data_root=Path("C:/Data")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

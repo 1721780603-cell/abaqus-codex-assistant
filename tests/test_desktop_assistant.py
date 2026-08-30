@@ -73,12 +73,40 @@ class TkRuntimeDiscoveryTests(unittest.TestCase):
             environment = {}
 
             configured = _configure_tk_runtime(
-                candidate_roots=[root], environment=environment
+                candidate_roots=[root],
+                environment=environment,
+                working_directory=root,
             )
 
             self.assertTrue(configured)
-            self.assertEqual(environment["TCL_LIBRARY"], str(tcl_directory))
-            self.assertEqual(environment["TK_LIBRARY"], str(tk_directory))
+            self.assertEqual(environment["TCL_LIBRARY"], "tcl8.6")
+            self.assertEqual(environment["TK_LIBRARY"], "tk8.6")
+
+    def test_non_ascii_install_uses_working_directory_relative_paths(self):
+        """中文安装根不能被写入 Tcl 绝对路径环境变量。"""
+
+        with tempfile.TemporaryDirectory() as directory:
+            app_root = Path(directory) / "中文安装目录" / "app"
+            tcl_root = app_root / "runtime" / "tcl"
+            tcl_directory = tcl_root / "tcl8.6"
+            tk_directory = tcl_root / "tk8.6"
+            tcl_directory.mkdir(parents=True)
+            tk_directory.mkdir()
+            (tcl_directory / "init.tcl").write_text("# test", encoding="ascii")
+            (tk_directory / "tk.tcl").write_text("# test", encoding="ascii")
+            environment = {}
+
+            configured = _configure_tk_runtime(
+                candidate_roots=[tcl_root],
+                environment=environment,
+                working_directory=app_root,
+            )
+
+            self.assertTrue(configured)
+            self.assertEqual(
+                environment["TCL_LIBRARY"], "runtime/tcl/tcl8.6"
+            )
+            self.assertEqual(environment["TK_LIBRARY"], "runtime/tcl/tk8.6")
 
     def test_incomplete_or_explicit_configuration_is_not_overwritten(self):
         """候选文件不完整时停止；用户显式配置时保持原值。"""

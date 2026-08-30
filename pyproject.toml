@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abaqus-codex-assistant"
-version = "0.2.1a1"
+version = "0.2.2a1"
 description = "面向 Abaqus 初学者的环境检测、建模、求解、结果读取与中文报告工具"
 readme = "README.md"
 requires-python = ">=3.10"

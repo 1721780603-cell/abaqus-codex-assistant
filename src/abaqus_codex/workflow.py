@@ -21,6 +21,10 @@ from abaqus_codex.abqpy_environment import (
 )
 from abaqus_codex.configuration import load_config, write_json
 from abaqus_codex.environment import inspect_abaqus
+from abaqus_codex.paths import (
+    activate_user_python_packages,
+    project_python_executable,
+)
 from abaqus_codex.report import write_chinese_report
 from abaqus_codex.user_subroutine import prepare_user_subroutine
 
@@ -39,7 +43,7 @@ def find_abqpy_command() -> Optional[Path]:
     """优先寻找当前虚拟环境中的 abqpy，再检查系统 PATH。"""
 
     script_name = "abqpy.exe" if sys.platform == "win32" else "abqpy"
-    local_command = Path(sys.executable).resolve().parent / script_name
+    local_command = project_python_executable().parent / script_name
     if local_command.is_file():
         return local_command
 
@@ -53,7 +57,7 @@ def build_abqpy_command_prefix() -> Optional[list[str]]:
     # Windows 的 console_scripts 启动器会记录安装时的绝对路径；项目移动后
     # 直接运行 abqpy.exe 可能失效，因此优先由当前解释器启动同一模块。
     if importlib.util.find_spec("abqpy") is not None:
-        return [str(Path(sys.executable).resolve()), "-m", "abqpy"]
+        return [str(project_python_executable()), "-m", "abqpy"]
     command = find_abqpy_command()
     return [str(command)] if command is not None else None
 
@@ -172,6 +176,13 @@ def run_analysis(
         # abqpy 官方支持用该环境变量指定 Abaqus 命令，确保检查和启动为同一版本。
         abaqus_environment = os.environ.copy()
         abaqus_environment["ABAQUS_BAT_PATH"] = str(abaqus["command"])
+        package_target = activate_user_python_packages()
+        if package_target is not None:
+            old_python_path = abaqus_environment.get("PYTHONPATH", "")
+            python_paths = [str(package_target)]
+            if old_python_path:
+                python_paths.append(old_python_path)
+            abaqus_environment["PYTHONPATH"] = os.pathsep.join(python_paths)
         completed = subprocess.run(
             command,
             cwd=work_dir,

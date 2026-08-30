@@ -92,8 +92,14 @@ def _configure_tk_runtime(
     *,
     candidate_roots: Optional[Iterable[Path]] = None,
     environment: Optional[MutableMapping[str, str]] = None,
+    working_directory: Optional[Path] = None,
 ) -> bool:
-    """在 Windows Python 未自动定位 Tcl/Tk 时补充当前进程环境。"""
+    """在 Windows Python 未自动定位 Tcl/Tk 时补充当前进程环境。
+
+    Windows 自带的 Tcl 8.6 在部分非 ASCII 安装路径下不能可靠地从
+    绝对环境变量加载 ``init.tcl``。相对当前工作目录的路径仍由 Tcl
+    正确解析，所以优先写入正斜杠相对路径；跨盘符时才退回绝对路径。
+    """
 
     target_environment = os.environ if environment is None else environment
     if target_environment.get("TCL_LIBRARY") and target_environment.get(
@@ -115,8 +121,15 @@ def _configure_tk_runtime(
             tk_directory = root / ("tk" + version)
             if not (tk_directory / "tk.tcl").is_file():
                 continue
-            target_environment.setdefault("TCL_LIBRARY", str(tcl_directory))
-            target_environment.setdefault("TK_LIBRARY", str(tk_directory))
+            base = Path.cwd() if working_directory is None else Path(working_directory)
+            try:
+                tcl_value = Path(os.path.relpath(tcl_directory, base)).as_posix()
+                tk_value = Path(os.path.relpath(tk_directory, base)).as_posix()
+            except (OSError, ValueError):
+                tcl_value = tcl_directory.as_posix()
+                tk_value = tk_directory.as_posix()
+            target_environment.setdefault("TCL_LIBRARY", tcl_value)
+            target_environment.setdefault("TK_LIBRARY", tk_value)
             return True
     return False
 

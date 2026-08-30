@@ -5,9 +5,14 @@ from __future__ import annotations
 
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import call, patch
 
-from abaqus_codex.abqpy_setup import AbqpySetupError, setup_abqpy
+from abaqus_codex.abqpy_setup import (
+    AbqpySetupError,
+    build_install_command,
+    setup_abqpy,
+)
 
 
 def usable_abaqus(version: str):
@@ -40,6 +45,26 @@ def abqpy_result(abaqus_version: str, version=None, usable=False):
 
 class AbqpySetupSafetyTests(unittest.TestCase):
     """确认安装只能在明确授权和可靠年份检测后进行。"""
+
+    def test_private_runtime_install_command_uses_explicit_user_target(self):
+        """安装版可选依赖不得写进由 Setup 管理的 runtime。"""
+
+        target = Path(
+            r"C:\Users\tester\AppData\Local\AbaqusCodexAssistant\python-packages"
+        )
+        command = build_install_command("abqpy==2025.*", target=target)
+
+        self.assertEqual(command[:4], [sys.executable, "-I", "-m", "pip"])
+        self.assertEqual(command[-3:], ["--target", str(target), "abqpy==2025.*"])
+
+    def test_source_install_command_preserves_existing_python_environment(self):
+        """源码安装不使用用户包目录，命令形式保持兼容。"""
+
+        command = build_install_command("abqpy==2021.*")
+
+        self.assertEqual(command[:4], [sys.executable, "-m", "pip", "install"])
+        self.assertNotIn("-I", command)
+        self.assertNotIn("--target", command)
 
     @patch("abaqus_codex.abqpy_setup._run_install")
     @patch("abaqus_codex.abqpy_setup.inspect_abqpy")

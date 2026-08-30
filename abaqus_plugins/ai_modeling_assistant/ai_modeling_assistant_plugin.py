@@ -30,7 +30,7 @@ toolset.registerGuiMenuButton(
     object=ChineseModelingAssistantForm(toolset),
     buttonText=u"AI 中文建模助手...",
     applicableModules=ALL,
-    version="0.2.1",
+    version="0.2.2",
     author="Abaqus Codex Assistant Contributors",
     description=(
         u"Abaqus 2021 中文建模助手界面预览。"

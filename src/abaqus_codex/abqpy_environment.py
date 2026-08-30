@@ -8,6 +8,8 @@ import sys
 from importlib import metadata
 from typing import Dict, Optional
 
+from abaqus_codex.paths import project_python_executable
+
 
 # Abaqus 和 abqpy 的新版版本号都以四位年份开头，例如 2021 和 2021.7.3。
 RELEASE_YEAR_PATTERN = re.compile(r"^(20\d{2})(?:\.|$)")
@@ -132,7 +134,7 @@ def inspect_abqpy(abaqus_version: Optional[str]) -> Dict[str, object]:
             abaqus_version
         ),
         "abaqus_verification_level": verification_level,
-        "python_executable": sys.executable,
+        "python_executable": str(project_python_executable()),
         "message": message,
     }
 

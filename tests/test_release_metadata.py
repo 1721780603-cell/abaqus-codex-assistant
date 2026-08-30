@@ -18,16 +18,25 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_python_and_public_metadata_match_alpha_release(self):
         """Python 使用 PEP 440 写法，公开发布名使用 alpha 写法。"""
 
-        self.assertEqual(__version__, "0.2.1a1")
+        self.assertEqual(__version__, "0.2.2a1")
         pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         citation = (PROJECT_ROOT / "CITATION.cff").read_text(encoding="utf-8")
         changelog = (PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn('version = "0.2.1a1"', pyproject)
-        self.assertIn('version: "0.2.1-alpha"', citation)
-        self.assertIn("## [0.2.1-alpha] - 2026-08-31", changelog)
+        builder = (PROJECT_ROOT / "installer" / "build_windows_setup.ps1").read_text(
+            encoding="ascii"
+        )
+        inno = (PROJECT_ROOT / "installer" / "windows_setup.iss").read_text(
+            encoding="ascii"
+        )
+        self.assertIn('version = "0.2.2a1"', pyproject)
+        self.assertIn('version: "0.2.2-alpha"', citation)
+        self.assertIn("## [0.2.2-alpha] - 2026-08-31", changelog)
+        self.assertIn("$AppVersion =", builder)
+        self.assertIn("AbaqusCodexAssistant-Setup-$AppVersion-x64", builder)
+        self.assertIn('#define AppVersion "0.2.2-alpha"', inno)
 
     def test_abaqus_plugins_show_the_same_minor_release(self):
-        """两个 Abaqus 菜单入口都应显示 0.2.1。"""
+        """两个 Abaqus 菜单入口都应显示 0.2.2。"""
 
         for relative in (
             "abaqus_plugins/ai_modeling_assistant/ai_modeling_assistant_plugin.py",
@@ -35,7 +44,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         ):
             with self.subTest(relative=relative):
                 source = (PROJECT_ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn('version="0.2.1"', source)
+                self.assertIn('version="0.2.2"', source)
 
 
 if __name__ == "__main__":

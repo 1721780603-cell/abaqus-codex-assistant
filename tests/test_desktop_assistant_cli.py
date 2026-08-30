@@ -87,6 +87,50 @@ class DesktopAssistantCommandTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         setup_mock.assert_called_once_with(confirmed=True, dry_run=False)
 
+    @patch("abaqus_codex.distribution_integration.integration_setup")
+    @patch("abaqus_codex.paths.is_private_runtime", return_value=True)
+    def test_installed_setup_routes_through_owned_integration_manifest(
+        self, private_runtime_mock, integration_mock
+    ):
+        """安装版后续补装插件时必须同步更新可卸载清单。"""
+
+        integration_mock.return_value = {
+            "plugin": {
+                "message": "安全插件已安装",
+                "target": r"C:\Users\test\abaqus_plugins\safe_material_action",
+                "backup": None,
+                "changed": True,
+            }
+        }
+
+        exit_code = main(["assistant-setup", "--yes"])
+
+        self.assertEqual(exit_code, 0)
+        private_runtime_mock.assert_called_once_with()
+        integration_mock.assert_called_once_with(confirmed=True, dry_run=False)
+
+    @patch("abaqus_codex.distribution_integration.integration_setup")
+    @patch("abaqus_codex.paths.is_private_runtime", return_value=True)
+    def test_installed_setup_dry_run_does_not_expect_plugin_dry_run_field(
+        self, private_runtime_mock, integration_mock
+    ):
+        """集成清单的插件子项不含 dry_run 也应能演练。"""
+
+        integration_mock.return_value = {
+            "plugin": {
+                "message": "演练完成",
+                "target": r"C:\Users\test\abaqus_plugins\safe_material_action",
+                "backup": None,
+                "changed": True,
+            }
+        }
+
+        exit_code = main(["assistant-setup", "--dry-run"])
+
+        self.assertEqual(exit_code, 0)
+        private_runtime_mock.assert_called_once_with()
+        integration_mock.assert_called_once_with(confirmed=False, dry_run=True)
+
 
 if __name__ == "__main__":
     unittest.main()
