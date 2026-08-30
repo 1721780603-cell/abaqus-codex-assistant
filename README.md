@@ -6,6 +6,8 @@
 
 > 本项目是非官方社区项目，与 Dassault Systèmes 不存在隶属、授权或赞助关系。
 
+> 原始项目与规范仓库：[`1721780603-cell/abaqus-codex-assistant`](https://github.com/1721780603-cell/abaqus-codex-assistant)。Copyright © 2026 `1721780603-cell` and contributors。使用或改编时请保留 [MIT License](LICENSE)、[版权与来源声明](NOTICE.md)，学术或教学使用请按 [CITATION.cff](CITATION.cff) 引用。
+
 ## 已实现功能
 
 - 检测 Abaqus 安装位置、版本及自带 Python；
@@ -14,6 +16,7 @@
 - 提供首次启动体检，分层检查项目 Python、GitHub 登录、Zotero 本地连接和 ScienceDirect 人工机构访问；
 - 检测 MCP 心跳和 Abaqus 进程，并在桥接离线时快速返回，避免工具持续转圈；
 - 支持在隐藏的 `Abaqus cae noGUI` 进程中运行 MCP，避免 CAE 图形界面被轮询占用；
+- 提供独立 Python 3 只读中文助手，默认读取 Abaqus 2021 一次性快照，不启动 MCP 后台轮询；
 - 在用户明确确认后安装或注册固定版本的 Abaqus MCP；
 - 选择入门、论文复现、科研、生产或教学场景；
 - 检测本机 Ollama 或 LM Studio，并把中文需求转换为受约束的矩形板 JSON；
@@ -78,6 +81,33 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m abaqus_codex onboard
 ```
+
+先在不连接 Abaqus 的情况下打开中文助手模拟界面：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex assistant --mock
+```
+
+真实使用前，先演练并安装安全材料动作插件：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex assistant-setup --dry-run
+.\.venv\Scripts\python.exe -m abaqus_codex assistant-setup --yes
+```
+
+关闭并重新打开 Abaqus/CAE 2021，打开一个已经保存过的 CAE；如需刷新完整对象名称摘要，再点击：
+
+```text
+Plug-ins → Abaqus Codex Assistant → Refresh Read-Only Snapshot
+```
+
+再启动桌面助手：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex assistant
+```
+
+中文助手现已支持固定句式驱动的二维矩形板拉伸十步闭环：几何、材料、截面、装配、静力步、相互作用检查、位移边界、网格、Job、ODB 极值与中文报告。发送只生成计划；点击“应用修改”并二次确认后才执行。每个 CAE 写步骤先建立唯一工作副本，报告也只新建不覆盖。默认模式不调用旧 MCP、不联网、不调用 AI；它不是开放式自然语言助手。详细命令和边界见[中文建模助手](docs/desktop-assistant.md)。
 
 体检显示的 Abaqus 命令路径符合预期、且年份为当前允许继续的 2021–2025 后，再让项目安装同年份的 abqpy。下面的命令会联网修改当前项目 Python，因此只在核对安装计划并同意后使用 `--yes`：
 
@@ -264,17 +294,24 @@ Abaqus 的 CAE、ODB、状态和日志文件保存在 `work/runs/<运行时间>/
 ```text
 abaqus-codex-assistant/
 ├─ .github/workflows/       GitHub 自动测试
+├─ abaqus_plugins/          Abaqus 2021 快照与安全材料动作插件
 ├─ configs/                 示例模型配置
 ├─ docs/                    快速开始、架构和边界说明
 ├─ examples/                面向初学者的示例说明
 ├─ skills/                  可安装的 Codex 新手建模向导
-├─ src/abaqus_codex/        主程序与 Abaqus 脚本
+├─ src/abaqus_codex/        主程序、桌面助手与 Abaqus 脚本
 ├─ tests/                   不需要 Abaqus 的离线测试
 ├─ work/                    本机计算文件，不提交
 └─ outputs/                 本机结果与报告，不提交
 ```
 
 ## 开发与测试
+
+开发环境应安装测试依赖：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+```
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location) "src")
@@ -309,6 +346,7 @@ Abaqus MCP 可以执行 Abaqus Python 脚本，属于高权限本地能力。不
 - [版本支持表](docs/version-support.md)
 - [移动载荷与 DLOAD 入门](docs/moving-load-dload.md)
 - [本地 AI 入门](docs/local-ai.md)
+- [中文材料修改助手](docs/desktop-assistant.md)
 - [Abaqus MCP 一直转圈排查](docs/mcp-troubleshooting.md)
 - [日常维护方式](docs/maintenance.md)
 - [GitHub 仓库设置](docs/github-settings.md)

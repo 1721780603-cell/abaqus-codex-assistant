@@ -42,6 +42,41 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("doctor", help="检查 Abaqus、abqpy 和 Abaqus MCP。")
 
+    assistant_parser = subparsers.add_parser(
+        "assistant", help="启动 Abaqus 2021 中文材料计划与安全修改助手。"
+    )
+    assistant_parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="显式使用模拟模型，不连接或冒充真实 Abaqus。",
+    )
+    assistant_parser.add_argument(
+        "--source",
+        choices=("snapshot", "mcp", "mock"),
+        default=None,
+        help="模型概要来源；默认读取一次性快照，MCP 仅为显式兼容模式。",
+    )
+    assistant_parser.add_argument(
+        "--mcp-home",
+        type=Path,
+        help="高级选项：指定已有 Abaqus MCP 工作目录。",
+    )
+
+    assistant_setup_parser = subparsers.add_parser(
+        "assistant-setup",
+        help="检查或安装 Abaqus 2021 安全材料动作插件。",
+    )
+    assistant_setup_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只做版本和文件预检，不写入用户插件目录。",
+    )
+    assistant_setup_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认安装到当前用户的 abaqus_plugins；不同旧版会先备份。",
+    )
+
     onboard_parser = subparsers.add_parser(
         "onboard", help="首次启动时检查建模、GitHub、Zotero 和科研访问。"
     )
@@ -204,6 +239,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if args.command == "doctor":
             return doctor_main()
+
+        if args.command == "assistant":
+            # 延后导入 Tkinter，普通命令和无图形 CI 不会加载桌面界面。
+            from abaqus_codex.desktop_assistant import launch
+
+            source = "mock" if args.mock else (args.source or "snapshot")
+            if args.mock and args.source is not None:
+                parser.error("--mock 不能与显式 --source 同时使用。")
+            if args.mcp_home is not None and source != "mcp":
+                parser.error("--mcp-home 只能与 --source mcp 一起使用。")
+            return launch(
+                mock=(source == "mock"),
+                source=source,
+                mcp_home=args.mcp_home,
+            )
+
+        if args.command == "assistant-setup":
+            from abaqus_codex.safe_action_setup import setup_safe_action_plugin
+
+            result = setup_safe_action_plugin(
+                confirmed=args.yes,
+                dry_run=args.dry_run,
+            )
+            print(result["message"])
+            print("目标目录：{0}".format(result["target"]))
+            if result["backup"]:
+                print("旧版备份：{0}".format(result["backup"]))
+            if not result["dry_run"] and result["changed"]:
+                print("请关闭并重新打开 Abaqus/CAE 2021 后再使用助手。")
+            return 0
 
         if args.command == "onboard":
             from abaqus_codex.onboarding import (
