@@ -7,7 +7,8 @@ param(
     [switch]$NoDesktopShortcut,
     [switch]$Yes,
     [string]$InstallRoot,
-    [string]$UserProfileRoot
+    [string]$UserProfileRoot,
+    [string]$CodexHome
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,29 +98,26 @@ if ([string]::IsNullOrWhiteSpace($UserProfileRoot)) {
     Stop-Setup "USERPROFILE is not available."
 }
 $env:USERPROFILE = $UserProfileRoot
+if ([string]::IsNullOrWhiteSpace($CodexHome)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+        $CodexHome = $env:CODEX_HOME
+    }
+    else {
+        $CodexHome = Join-Path $UserProfileRoot ".codex"
+    }
+}
+$CodexHome = [System.IO.Path]::GetFullPath($CodexHome)
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
         Stop-Setup "LOCALAPPDATA is not available."
     }
-    $InstallRoot = Join-Path $env:LOCALAPPDATA "AbaqusCodexAssistant"
+    $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\AbaqusCodexAssistant"
 }
 
 $python = Find-Python
 $pythonArgs = @($python.Prefix)
 $pythonArgs += @("-c", "import sys; print(sys.version.split()[0])")
 Invoke-Checked $python.File $pythonArgs
-
-# Run the read-only Abaqus 2021 preflight from the release before any write.
-try {
-    $env:PYTHONPATH = Join-Path $sourceRoot "src"
-    $preflightArgs = @($python.Prefix)
-    $preflightArgs += @("-m", "abaqus_codex", "assistant-setup", "--dry-run")
-    Invoke-Checked $python.File $preflightArgs
-}
-finally {
-    # The installer has its own process, so remove only its temporary variable.
-    Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue -WhatIf:$false
-}
 
 if ((Test-Path -LiteralPath $InstallRoot) -and $Mode -eq "Install") {
     if (-not $WhatIfPreference) {
@@ -131,8 +129,8 @@ if ((Test-Path -LiteralPath $InstallRoot) -and $Mode -eq "Install") {
 Write-Host ""
 Write-Host "Install plan"
 Write-Host "  Application: $InstallRoot"
-Write-Host "  Abaqus plugin: $(Join-Path $UserProfileRoot 'abaqus_plugins\safe_material_action')"
-Write-Host "  Codex skill: $(Join-Path $UserProfileRoot '.codex\skills\abaqus-modeling-guide')"
+Write-Host "  Codex skill: $(Join-Path $CodexHome 'skills\abaqus-modeling-guide')"
+Write-Host "  Abaqus detection: after core installation"
 Write-Host "  abqpy download: $([bool]$InstallAbqpy)"
 Write-Host "  MCP download and registration: $([bool]$InstallMcp)"
 Write-Host "No Abaqus files, passwords, cookies, API keys, or Codex credentials will be copied."
@@ -212,19 +210,69 @@ $installedPython = Join-Path $InstallRoot ".venv\Scripts\python.exe"
 
 # Keep the Skill replaceable so it can be upgraded independently.
 $skillSource = Join-Path $InstallRoot "skills\abaqus-modeling-guide"
-$skillTarget = Join-Path $UserProfileRoot ".codex\skills\abaqus-modeling-guide"
+$skillTarget = Join-Path $CodexHome "skills\abaqus-modeling-guide"
 New-Item -ItemType Directory -Path (Split-Path -Parent $skillTarget) -Force | Out-Null
 $skillBackup = Backup-Directory $skillTarget
 Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Recurse
 
-# Reuse the Python safety boundary for validation and old-plugin backup.
-Invoke-Checked $installedPython @("-m", "abaqus_codex", "assistant-setup", "--yes")
-
-if ($InstallAbqpy) {
-    Invoke-Checked $installedPython @("-m", "abaqus_codex", "abqpy-setup", "--yes")
+# Detect Abaqus only after the core app and Skill are installed.
+$abaqusCheck = $null
+$preflightOutput = & $installedPython -m abaqus_codex install-preflight --json
+try {
+    $abaqusCheck = ($preflightOutput -join "`n") | ConvertFrom-Json
 }
+catch {
+    Write-Warning "Abaqus detection could not be read. The core installation will be kept."
+    $abaqusCheck = [pscustomobject]@{
+        detected = $false
+        usable = $false
+        version = $null
+        safe_plugin_supported = $false
+    }
+}
+$abaqusDetected = [bool]$abaqusCheck.detected
+$installSafePlugin = [bool]$abaqusCheck.safe_plugin_supported
+$detectedAbaqusVersion = [string]$abaqusCheck.version
+if ([string]::IsNullOrWhiteSpace($detectedAbaqusVersion)) {
+    $detectedAbaqusVersion = "not-detected"
+}
+
+# Install the model-changing plugin only for its verified Abaqus version.
+$pluginInstalled = $false
+$pluginSetupStatus = "not-supported"
+if ($installSafePlugin) {
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "assistant-setup", "--yes")
+        $pluginInstalled = $true
+        $pluginSetupStatus = "completed"
+    }
+    catch {
+        $pluginSetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but the Abaqus safe plugin failed: $($_.Exception.Message)"
+    }
+}
+
+$abqpySetupStatus = "not-requested"
+if ($InstallAbqpy) {
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "abqpy-setup", "--yes")
+        $abqpySetupStatus = "completed"
+    }
+    catch {
+        $abqpySetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but abqpy setup failed: $($_.Exception.Message)"
+    }
+}
+$mcpSetupStatus = "not-requested"
 if ($InstallMcp) {
-    Invoke-Checked $installedPython @("-m", "abaqus_codex", "mcp-setup", "--yes")
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "mcp-setup", "--yes")
+        $mcpSetupStatus = "completed"
+    }
+    catch {
+        $mcpSetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but MCP setup failed: $($_.Exception.Message)"
+    }
 }
 
 $desktop = [Environment]::GetFolderPath("Desktop")
@@ -232,9 +280,11 @@ if (-not $NoDesktopShortcut -and -not [string]::IsNullOrWhiteSpace($desktop)) {
     $shortcutPath = Join-Path $desktop "Abaqus Codex Assistant.lnk"
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = Join-Path $InstallRoot "Start-Abaqus-Codex-Assistant.cmd"
+    $launcherPath = Join-Path $InstallRoot "Start-Abaqus-Codex-Assistant.cmd"
+    $shortcut.TargetPath = $env:ComSpec
+    $shortcut.Arguments = '/d /c ""{0}""' -f $launcherPath
     $shortcut.WorkingDirectory = $InstallRoot
-    $shortcut.Description = "Abaqus 2021 Chinese modeling assistant"
+    $shortcut.Description = "Abaqus Chinese modeling assistant"
     $shortcut.Save()
 }
 
@@ -243,17 +293,38 @@ $manifest = @{
     installed_at = (Get-Date).ToString("o")
     install_root = $InstallRoot
     user_profile_root = $UserProfileRoot
+    codex_home = $CodexHome
     skill_target = $skillTarget
     plugin_target = (Join-Path $UserProfileRoot "abaqus_plugins\safe_material_action")
+    plugin_installed = $pluginInstalled
+    plugin_setup = $pluginSetupStatus
+    abqpy_setup = $abqpySetupStatus
+    mcp_setup = $mcpSetupStatus
     skill_backup = $skillBackup
     application_backup = $applicationBackup
-    abaqus_support = "2021-verified"
+    detected_abaqus_version = $detectedAbaqusVersion
+    abaqus_detected = $abaqusDetected
+    abaqus_support = $(if ($pluginInstalled) { "2021-verified" } else { "core-only" })
     credentials_copied = $false
 }
 $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $InstallRoot "install-manifest.json") -Encoding UTF8
 
 Write-Host ""
 Write-Host "Installation completed."
-Write-Host "Restart Abaqus/CAE 2021 and Codex before the first real-model test."
+if ($pluginInstalled) {
+    Write-Host "Restart Abaqus/CAE and Codex before the first real-model test."
+}
+else {
+    if ($abaqusDetected) {
+        Write-Host "Abaqus $detectedAbaqusVersion was detected after installation. The version-specific model modification plugin was skipped."
+    }
+    else {
+        Write-Host "The core app and Skill are installed. Abaqus was not detected; run Environment Check after Abaqus is installed or configured."
+    }
+}
+if ($pluginSetupStatus -eq "failed" -or $abqpySetupStatus -eq "failed" -or $mcpSetupStatus -eq "failed") {
+    Write-Host "One or more optional components failed. The managed core installation was kept."
+    Write-Host "Correct the reported issue, then run this release again with -Mode Repair and the required optional switches."
+}
 Write-Host "Run the desktop shortcut, then open Environment Check."
 Invoke-Checked $installedPython @("-m", "abaqus_codex", "onboard")

@@ -44,7 +44,7 @@ def _write_status():
     temporary = path + ".tmp"
     value = {
         "schema": STATUS_SCHEMA,
-        "version": "0.2.0",
+        "version": "0.2.1",
         "abaqus_release": "2021",
         "status": "running",
         "timestamp": time.time(),
@@ -163,7 +163,7 @@ toolset.registerGuiMenuButton(
     buttonText="Abaqus Codex Assistant|Process One Pending Safe Action",
     messageId=SafeActionPump.ID_MANUAL,
     applicableModules=ALL,
-    version="0.2.0",
+    version="0.2.1",
     author="1721780603-cell and contributors",
     description="Process one validated material action in the GUI event loop.",
 )

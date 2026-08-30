@@ -46,22 +46,26 @@
 ## 运行要求
 
 - Windows 10/11；
-- 已合法安装并配置许可证的 Abaqus；
 - Python 3.10 或更高版本；
-- Git；
+- 安装和打开核心助手不要求先装 Abaqus；创建或求解真实模型时，必须已有合法安装、可用许可证和明确版本的 Abaqus；
+- Git 仅为源码开发或 GitHub 工作流所需；
 - Abaqus 2021–2025 使用与年份严格匹配的 `abqpy==<年份>.*`，例如 Abaqus 2024 使用 `abqpy==2024.*`；Abaqus 2026 自动流程当前禁用；
 - Codex 和 Abaqus MCP 仅为智能模式所需。
 - 三维移动载荷示例还需要与 Abaqus 匹配的 Visual Studio 和 Intel Fortran Classic。
 
 项目不分发 Abaqus，也不绕过许可证。
 
-## Codex Skill 新手向导
+## 两条安装路径
+
+### 路径一：只安装 Codex Skill
+
+这条路径只安装对话向导，适合体验逐步提问、环境解释和安装引导。**只装 Skill 不等于安装完整应用**：它不会安装桌面助手、项目 Python 环境、Abaqus 插件、abqpy 或 MCP，也不能单独执行建模。
 
 在 Codex 中调用 `$skill-installer`，要求从下面的 GitHub 目录安装 Skill：
 
 <https://github.com/1721780603-cell/abaqus-codex-assistant/tree/main/skills/abaqus-modeling-guide>
 
-安装完成后可以这样开始：
+安装完成后，从下一轮对话开始可以这样使用：
 
 ```text
 使用 $abaqus-modeling-guide 带我一步步建立并运行第一个 Abaqus 模型。
@@ -69,11 +73,9 @@
 
 向导会先运行只读首次体检，分别报告项目 Python、Abaqus 与其内置 Python、同年份 abqpy、Abaqus MCP、Git、GitHub CLI 登录和 Zotero 状态，再让用户选择“基础建模”“Codex 智能建模”“科研复现全套”或“单项修复”。如果发现 MCP 缺失或异常，只会解释影响并询问是否安装或修复；没有用户明确同意，不会下载、注册或启动 MCP。它一次只处理一个缺项；安装、注册、启用、重启和登录均不会静默执行。ScienceDirect 机构登录必须由用户本人在官方网页完成，Skill 不读取密码、验证码、Cookie 或会话令牌。
 
-体检完成后，向导会一次只询问一组建模参数。它把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。
+体检完成后，向导会一次只询问一组建模参数。它把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。电脑上尚无完整应用时，向导只会引导用户下载 Release，不会把 Skill 误报成已经具备建模能力。
 
-## 快速开始
-
-### 普通用户：统一安装向导
+### 路径二：安装完整桌面应用
 
 从 GitHub Releases 下载并完整解压项目后，可先查看不会写入电脑的安装计划：
 
@@ -81,13 +83,21 @@
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -WhatIf
 ```
 
-确认电脑检测到 Abaqus 2021 后，再运行统一安装。它会把桌面助手安装到当前用户的 `%LOCALAPPDATA%`，同时安装 Codex Skill 和 Abaqus 安全插件，并创建桌面快捷方式：
+可以直接运行统一安装，不要求先检测到 Abaqus。安装器会先把桌面助手安装到当前用户的 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，同时安装 Codex Skill 并创建桌面快捷方式；历史记录和快照仍放在独立的 `%LOCALAPPDATA%\AbaqusCodexAssistant` 数据目录。随后再检测 Abaqus，只有可用的 Abaqus 2021 会自动安装当前已完成真机验证的安全修改插件：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1
 ```
 
-MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
+MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`，它们仍会按各自的版本兼容规则检查。非 2021 版本可以安装核心助手和 Skill，但不会被误报为已能安全修改模型。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
+
+已经单独安装过旧版 Skill 时，不要手工覆盖目录。下载新的完整 Release 后运行下面的修复安装；安装器会先备份旧 Skill 和旧应用目录：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -Mode Repair
+```
+
+## 快速开始
 
 ### 开发者：从源码运行
 

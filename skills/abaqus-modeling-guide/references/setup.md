@@ -10,11 +10,19 @@
 - `configs/rectangle_tension.json`；
 - `src/abaqus_codex/`。
 
-不要根据其他用户的电脑猜测路径。优先检查当前目录和用户明确提供的目录。
+按以下顺序只读检查：
+
+1. 统一安装器的默认完整应用目录 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`；
+2. 当前目录及其父目录；
+3. 用户明确提供的目录。
+
+默认完整应用目录已经包含私有 `.venv`，找到后直接用它运行体检，不要再次创建环境。不要无边界扫描用户目录，也不要根据其他用户的电脑猜测路径。只安装到 `CODEX_HOME` 的本 Skill 不包含桌面应用或项目运行环境。
 
 ## 项目尚未下载
 
-普通用户优先从 GitHub Releases 下载完整发布包，并按项目根目录 `installer/README.md` 使用统一安装向导。安装器会先只读确认 Abaqus 2021，再安装桌面助手、Skill 和安全插件；MCP 与 abqpy 仍需用户单独选择，因为它们会联网。
+普通用户优先从项目的 [GitHub Releases](https://github.com/1721780603-cell/abaqus-codex-assistant/releases) 下载并完整解压发布包，再按项目根目录 `installer/README.md` 使用统一安装向导。不能只下载一个 `install.ps1`。安装器会先把完整应用放到 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant` 并安装 Skill，再检测 Abaqus；没有检测到 Abaqus 也不会撤销核心安装。仅当检测到维护者已验证的 Abaqus 2021 时，才额外安装安全修改插件。MCP 与 abqpy 仍需用户单独选择，因为它们会联网且有独立版本边界。
+
+若 Codex 使用自定义 `CODEX_HOME`，统一安装器会优先把 Skill 放到该活动主目录；安装前先核对计划中显示的 Skill 目标。不要复制 Codex 凭据或会话文件。
 
 需要参与开发时，先确认 Git 可用，再询问用户希望把项目放在哪个父目录。得到同意后才执行：
 
@@ -24,9 +32,19 @@ git clone https://github.com/1721780603-cell/abaqus-codex-assistant.git
 
 不要克隆到系统目录，也不要覆盖同名非空文件夹。
 
-## 创建项目环境
+## 使用统一安装的私有环境
 
-以下命令均在项目根目录执行。运行前逐条说明其作用：
+若项目位于 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，在该目录直接运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
+```
+
+该环境由统一安装器维护。升级现有应用或 Skill 时，从新的完整 Release 目录运行 `installer/install.ps1 -Mode Repair`，不要在安装目录中手工覆盖文件。
+
+## 创建源码开发环境
+
+只有从源码参与开发时才执行以下命令。它们均在源码项目根目录运行；运行前逐条说明其作用：
 
 ```powershell
 py -m venv .venv

@@ -77,6 +77,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="确认安装到当前用户的 abaqus_plugins；不同旧版会先备份。",
     )
 
+    install_preflight_parser = subparsers.add_parser(
+        "install-preflight",
+        help="检测任意 Abaqus，并报告当前安全插件是否适配。",
+    )
+    install_preflight_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="输出供统一安装器读取的 ASCII JSON。",
+    )
+
     onboard_parser = subparsers.add_parser(
         "onboard", help="首次启动时检查建模、GitHub、Zotero 和科研访问。"
     )
@@ -269,6 +279,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if not result["dry_run"] and result["changed"]:
                 print("请关闭并重新打开 Abaqus/CAE 2021 后再使用助手。")
             return 0
+
+        if args.command == "install-preflight":
+            from abaqus_codex.install_preflight import main as preflight_main
+
+            return preflight_main(json_output=args.json)
 
         if args.command == "onboard":
             from abaqus_codex.onboarding import (
