@@ -14,6 +14,10 @@ from abaqus_codex.assistant_protocol import seal_action_plan, validate_action_pl
 
 
 MAX_LENGTH_MM = 1.0e9
+DEFAULT_RECTANGLE_COMMAND = (
+    "创建一个长 100 mm、宽 20 mm 的二维矩形板，"
+    "模型名 Model-1，零件名 Plate"
+)
 NAME_PATTERN = re.compile(r'^[^\\/:*?"<>|\x00-\x1f\x7f]{1,80}$')
 RECTANGLE_PATTERN = re.compile(
     r"^创建一个长\s*(?P<length>[0-9]+(?:\.[0-9]+)?)\s*mm[、,，\s]*"
@@ -71,8 +75,7 @@ def parse_rectangle_command(value: object) -> Optional[RectangleCreateRequest]:
     match = RECTANGLE_PATTERN.fullmatch(text)
     if match is None:
         raise RectangleCommandError(
-            "第一步请使用：创建一个长 100 mm、宽 20 mm 的二维矩形板，"
-            "模型名 Model-1，零件名 Plate"
+            "第一步请使用：" + DEFAULT_RECTANGLE_COMMAND
         )
     return RectangleCreateRequest(
         model_name=_safe_name(match.group("model"), "模型名"),
