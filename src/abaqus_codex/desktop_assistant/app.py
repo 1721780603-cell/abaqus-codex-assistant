@@ -14,7 +14,10 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, scrolledtext, ttk
 
-from abaqus_codex.desktop_assistant.bridge import FileIpcReadOnlyBridge
+from abaqus_codex.desktop_assistant.bridge import (
+    FileIpcReadOnlyBridge,
+    ReadOnlyBridgeError,
+)
 from abaqus_codex.desktop_assistant.controller import (
     AssistantViewState,
     classify_command,
@@ -42,7 +45,10 @@ from abaqus_codex.desktop_assistant.codex_app_server import (
 from abaqus_codex.desktop_assistant.environment_check import (
     EnvironmentCheckItem,
     build_environment_items,
+    environment_action_label,
     format_environment_detail,
+    format_environment_progress,
+    recommended_environment_index,
     summarize_environment,
 )
 from abaqus_codex.desktop_assistant.material_flow import (
@@ -670,9 +676,9 @@ class DesktopAssistantApp:
 
         window = tk.Toplevel(self.root)
         self.environment_window = window
-        window.title("Abaqus Codex Assistant · 环境体检")
-        window.geometry("{0}x{1}".format(self._px(880), self._px(620)))
-        window.minsize(self._px(720), self._px(520))
+        window.title("Abaqus Codex Assistant · 首次配置与环境体检")
+        window.geometry("{0}x{1}".format(self._px(920), self._px(660)))
+        window.minsize(self._px(760), self._px(560))
         window.configure(background=COLOR_BACKGROUND)
         window.grid_rowconfigure(1, weight=1)
         window.grid_columnconfigure(0, weight=1)
@@ -687,7 +693,7 @@ class DesktopAssistantApp:
         heading.grid_columnconfigure(0, weight=1)
         tk.Label(
             heading,
-            text="环境体检",
+            text="首次配置与环境体检",
             background=COLOR_HEADER,
             foreground="#FFFFFF",
             font=self._font(15, "bold"),
@@ -703,6 +709,22 @@ class DesktopAssistantApp:
             font=self._font(9),
             anchor="w",
         ).grid(row=1, column=0, sticky="ew", pady=(self._px(3), 0))
+        self.environment_progress_var = tk.StringVar(
+            value=(
+                "配置路线：1 应用 → 2 Abaqus → 3 同年份 abqpy → "
+                "4 Codex/MCP → 5 第一个模型"
+            )
+        )
+        tk.Label(
+            heading,
+            textvariable=self.environment_progress_var,
+            background=COLOR_HEADER,
+            foreground="#FFFFFF",
+            font=self._font(9),
+            anchor="w",
+            justify="left",
+            wraplength=self._px(860),
+        ).grid(row=2, column=0, sticky="ew", pady=(self._px(5), 0))
 
         content = ttk.Frame(
             window,
@@ -784,9 +806,10 @@ class DesktopAssistantApp:
         actions.grid_columnconfigure(0, weight=1)
         self.environment_copy_button = ttk.Button(
             actions,
-            text="复制给 Codex",
-            style="Secondary.TButton",
-            command=self._copy_selected_environment_next_step,
+            text="请先完成检查",
+            style="Accent.TButton",
+            command=self._handle_selected_environment_action,
+            state="disabled",
         )
         self.environment_copy_button.grid(row=0, column=0, sticky="w")
         self.environment_refresh_button = ttk.Button(
@@ -798,7 +821,7 @@ class DesktopAssistantApp:
         self.environment_refresh_button.grid(row=0, column=1, sticky="e")
         ttk.Button(
             actions,
-            text="关闭",
+            text="返回建模",
             style="Secondary.TButton",
             command=window.destroy,
         ).grid(row=0, column=2, sticky="e", padx=(self._px(8), 0))
@@ -816,6 +839,9 @@ class DesktopAssistantApp:
         self.environment_check_running = True
         self.environment_refresh_button.configure(
             text="正在检查", state="disabled"
+        )
+        self.environment_copy_button.configure(
+            text="请先完成检查", state="disabled"
         )
         self.environment_summary_var.set(
             "正在检查 Abaqus、Python、Codex、MCP、Git 和可选科研工具……"
@@ -838,10 +864,12 @@ class DesktopAssistantApp:
         try:
             result = inspect_onboarding()
             codex_status = inspect_codex_status()
+            self._probe_environment_mcp_capability(result)
             items = build_environment_items(result, codex_status)
             payload = {
                 "items": items,
                 "summary": summarize_environment(items),
+                "codex_status": codex_status,
             }
         except Exception:
             self.environment_queue.put(
@@ -865,6 +893,9 @@ class DesktopAssistantApp:
         )
         if event_name != "success" or not isinstance(payload, dict):
             self.environment_summary_var.set("体检未完成")
+            self.environment_progress_var.set(
+                "配置路线：检查未完成；请先查看下面的本地错误说明。"
+            )
             self._set_readonly_text(
                 self.environment_detail_text,
                 str(payload),
@@ -874,8 +905,13 @@ class DesktopAssistantApp:
         items = payload.get("items")
         if not isinstance(items, list):
             self.environment_summary_var.set("体检结果格式无效")
+            self.environment_progress_var.set("配置路线：检查结果无法读取。")
             return
+        codex_status = payload.get("codex_status")
+        if isinstance(codex_status, CodexStatus):
+            self.latest_codex_status = codex_status
         self.environment_summary_var.set(str(payload.get("summary") or "检查完成"))
+        self.environment_progress_var.set(format_environment_progress(items))
         for index, item in enumerate(items):
             if not isinstance(item, EnvironmentCheckItem):
                 continue
@@ -890,9 +926,11 @@ class DesktopAssistantApp:
             )
         children = self.environment_tree.get_children()
         if children:
-            self.environment_tree.selection_set(children[0])
-            self.environment_tree.focus(children[0])
-            self.environment_tree.see(children[0])
+            recommended_index = recommended_environment_index(items)
+            selected_id = children[min(recommended_index, len(children) - 1)]
+            self.environment_tree.selection_set(selected_id)
+            self.environment_tree.focus(selected_id)
+            self.environment_tree.see(selected_id)
             self._show_selected_environment_detail()
 
     def _show_selected_environment_detail(self, _event: object = None) -> None:
@@ -908,9 +946,13 @@ class DesktopAssistantApp:
             self.environment_detail_text,
             format_environment_detail(item),
         )
+        self.environment_copy_button.configure(
+            text=environment_action_label(item),
+            state="normal" if item.action_kind != "none" else "disabled",
+        )
 
-    def _copy_selected_environment_next_step(self) -> None:
-        """只复制当前检查项的公开处理提示，不执行安装或登录。"""
+    def _handle_selected_environment_action(self) -> None:
+        """执行当前项唯一的受限动作；安装和模型写入仍不会自动发生。"""
 
         selection = self.environment_tree.selection()
         if not selection:
@@ -920,11 +962,70 @@ class DesktopAssistantApp:
         if item is None:
             self.environment_summary_var.set("当前检查项没有可复制内容。")
             return
+        if item.action_kind == "codex_login":
+            self._handle_codex_login()
+            self.environment_summary_var.set(
+                "请在官方浏览器页面完成登录；完成后返回这里点击“重新检查”。"
+            )
+            return
+        if item.action_kind == "start_model":
+            window = self.environment_window
+            if window is not None and window.winfo_exists():
+                window.destroy()
+            self.command_text.focus_set()
+            self._append_log("首次配置已完成，已返回第 1/10 步建模入口。")
+            return
+        if item.action_kind != "copy_codex" or not item.codex_prompt:
+            self.environment_summary_var.set("当前项没有需要复制的 Codex 请求。")
+            return
         self.root.clipboard_clear()
-        self.root.clipboard_append(item.next_step)
+        self.root.clipboard_append(item.codex_prompt)
         self.root.update_idletasks()
         self.environment_summary_var.set(
-            "已复制“{0}”的下一步，可粘贴到 Codex 对话中。".format(item.name)
+            "已复制“{0}”请求；请返回 Codex，按 Ctrl+V 粘贴并发送。".format(
+                item.name
+            )
+        )
+        self.environment_copy_button.configure(
+            text="已复制，请回 Codex 粘贴",
+            state="disabled",
+        )
+
+    def _probe_environment_mcp_capability(
+        self,
+        result: dict[str, object],
+    ) -> None:
+        """心跳正常后再执行一次固定只读查询，避免把进程存活误报为已连接。"""
+
+        environment = result.get("environment")
+        if not isinstance(environment, dict):
+            return
+        mcp = environment.get("mcp")
+        if not isinstance(mcp, dict):
+            return
+        mcp["read_only_probe_passed"] = False
+        if not mcp.get("responsive"):
+            mcp["read_only_probe_message"] = "插件心跳未就绪，尚未执行只读能力探测。"
+            return
+
+        probe_bridge = (
+            self.bridge
+            if isinstance(self.bridge, FileIpcReadOnlyBridge)
+            else FileIpcReadOnlyBridge()
+        )
+        try:
+            probe_bridge.get_model_info(timeout_seconds=3.0)
+        except ReadOnlyBridgeError:
+            mcp["read_only_probe_message"] = (
+                "插件有心跳，但固定 get_model_info 只读查询没有通过。"
+            )
+            return
+        except Exception:
+            mcp["read_only_probe_message"] = "只读能力探测遇到本地错误。"
+            return
+        mcp["read_only_probe_passed"] = True
+        mcp["read_only_probe_message"] = (
+            "固定 get_model_info 只读查询已通过；模型没有被修改。"
         )
 
     def _record_history(self, *, title: str, status: str, details: str) -> None:
