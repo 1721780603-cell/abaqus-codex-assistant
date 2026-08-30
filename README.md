@@ -73,6 +73,24 @@
 
 ## 快速开始
 
+### 普通用户：统一安装向导
+
+从 GitHub Releases 下载并完整解压项目后，可先查看不会写入电脑的安装计划：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -WhatIf
+```
+
+确认电脑检测到 Abaqus 2021 后，再运行统一安装。它会把桌面助手安装到当前用户的 `%LOCALAPPDATA%`，同时安装 Codex Skill 和 Abaqus 安全插件，并创建桌面快捷方式：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\install.ps1
+```
+
+MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
+
+### 开发者：从源码运行
+
 以下命令在 PowerShell 的项目根目录运行。先安装项目并进行只读体检，不要在尚未确认 Abaqus 年份时直接安装最新版 abqpy：
 
 ```powershell

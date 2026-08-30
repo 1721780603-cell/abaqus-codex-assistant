@@ -1,0 +1,259 @@
+[CmdletBinding(SupportsShouldProcess = $true)]
+param(
+    [ValidateSet("Install", "Repair")]
+    [string]$Mode = "Install",
+    [switch]$InstallAbqpy,
+    [switch]$InstallMcp,
+    [switch]$NoDesktopShortcut,
+    [switch]$Yes,
+    [string]$InstallRoot,
+    [string]$UserProfileRoot
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+function Stop-Setup([string]$Message) {
+    throw "Abaqus Codex Assistant setup: $Message"
+}
+
+function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Setup "command failed with exit code ${LASTEXITCODE}: $FilePath"
+    }
+}
+
+function Find-Python {
+    $py = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($null -ne $py) {
+        & $py.Source -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+        if ($LASTEXITCODE -eq 0) {
+            return @{ File = $py.Source; Prefix = @("-3") }
+        }
+    }
+
+    $python = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($null -ne $python) {
+        & $python.Source -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+        if ($LASTEXITCODE -eq 0) {
+            return @{ File = $python.Source; Prefix = @() }
+        }
+    }
+    Stop-Setup "Python 3.10 or newer was not found. Install Python, then run setup again."
+}
+
+function Copy-Payload([string]$SourceRoot, [string]$DestinationRoot) {
+    $directories = @("src", "configs", "skills", "abaqus_plugins", "docs")
+    $files = @(
+        "pyproject.toml",
+        "README.md",
+        "LICENSE",
+        "NOTICE.md",
+        "AUTHORS.md",
+        "SECURITY.md",
+        "CHANGELOG.md"
+    )
+
+    foreach ($name in $directories) {
+        Copy-Item -LiteralPath (Join-Path $SourceRoot $name) -Destination $DestinationRoot -Recurse
+    }
+    foreach ($name in $files) {
+        Copy-Item -LiteralPath (Join-Path $SourceRoot $name) -Destination $DestinationRoot
+    }
+    Copy-Item -LiteralPath (Join-Path $SourceRoot "installer") -Destination $DestinationRoot -Recurse
+}
+
+function Backup-Directory([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backup = "$Path.backup-$stamp"
+    $index = 0
+    while (Test-Path -LiteralPath $backup) {
+        $index += 1
+        $backup = "$Path.backup-$stamp-$index"
+    }
+    Move-Item -LiteralPath $Path -Destination $backup
+    return $backup
+}
+
+if ($env:OS -ne "Windows_NT") {
+    Stop-Setup "this installer supports Windows only."
+}
+
+$sourceRoot = Split-Path -Parent $PSScriptRoot
+foreach ($required in @("pyproject.toml", "src\abaqus_codex", "skills\abaqus-modeling-guide", "abaqus_plugins\safe_material_action")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $required))) {
+        Stop-Setup "release payload is incomplete: $required"
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($UserProfileRoot)) {
+    $UserProfileRoot = $env:USERPROFILE
+}
+if ([string]::IsNullOrWhiteSpace($UserProfileRoot)) {
+    Stop-Setup "USERPROFILE is not available."
+}
+$env:USERPROFILE = $UserProfileRoot
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        Stop-Setup "LOCALAPPDATA is not available."
+    }
+    $InstallRoot = Join-Path $env:LOCALAPPDATA "AbaqusCodexAssistant"
+}
+
+$python = Find-Python
+$pythonArgs = @($python.Prefix)
+$pythonArgs += @("-c", "import sys; print(sys.version.split()[0])")
+Invoke-Checked $python.File $pythonArgs
+
+# Run the read-only Abaqus 2021 preflight from the release before any write.
+try {
+    $env:PYTHONPATH = Join-Path $sourceRoot "src"
+    $preflightArgs = @($python.Prefix)
+    $preflightArgs += @("-m", "abaqus_codex", "assistant-setup", "--dry-run")
+    Invoke-Checked $python.File $preflightArgs
+}
+finally {
+    # The installer has its own process, so remove only its temporary variable.
+    Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue -WhatIf:$false
+}
+
+if ((Test-Path -LiteralPath $InstallRoot) -and $Mode -eq "Install") {
+    if (-not $WhatIfPreference) {
+        Stop-Setup "the target already exists. Run again with -Mode Repair."
+    }
+    Write-Warning "The target already exists; an actual update requires -Mode Repair."
+}
+
+Write-Host ""
+Write-Host "Install plan"
+Write-Host "  Application: $InstallRoot"
+Write-Host "  Abaqus plugin: $(Join-Path $UserProfileRoot 'abaqus_plugins\safe_material_action')"
+Write-Host "  Codex skill: $(Join-Path $UserProfileRoot '.codex\skills\abaqus-modeling-guide')"
+Write-Host "  abqpy download: $([bool]$InstallAbqpy)"
+Write-Host "  MCP download and registration: $([bool]$InstallMcp)"
+Write-Host "No Abaqus files, passwords, cookies, API keys, or Codex credentials will be copied."
+
+if (-not $Yes -and -not $WhatIfPreference) {
+    $answer = Read-Host "Type INSTALL to continue"
+    if ($answer -cne "INSTALL") {
+        Stop-Setup "cancelled by user."
+    }
+}
+
+if (-not $PSCmdlet.ShouldProcess($InstallRoot, "$Mode Abaqus Codex Assistant")) {
+    return
+}
+
+$installParent = Split-Path -Parent $InstallRoot
+New-Item -ItemType Directory -Path $installParent -Force | Out-Null
+$staging = Join-Path $installParent (".AbaqusCodexAssistant.installing-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $staging | Out-Null
+
+$applicationBackup = $null
+$applicationActivated = $false
+try {
+    Copy-Payload $sourceRoot $staging
+
+    $launcher = @"
+@echo off
+setlocal
+set "APP_DIR=%~dp0"
+"%APP_DIR%.venv\Scripts\python.exe" -m abaqus_codex assistant
+set "APP_EXIT_CODE=%ERRORLEVEL%"
+if not "%APP_EXIT_CODE%"=="0" pause
+endlocal & exit /b %APP_EXIT_CODE%
+"@
+    [System.IO.File]::WriteAllText((Join-Path $staging "Start-Abaqus-Codex-Assistant.cmd"), $launcher.Replace("`n", "`r`n"), [System.Text.Encoding]::ASCII)
+
+    if (Test-Path -LiteralPath $InstallRoot) {
+        $applicationBackup = Backup-Directory $InstallRoot
+    }
+    Move-Item -LiteralPath $staging -Destination $InstallRoot
+    $applicationActivated = $true
+
+    # Create the environment at its final path so editable metadata stays valid.
+    $venvRoot = Join-Path $InstallRoot ".venv"
+    $venvArgs = @($python.Prefix)
+    $venvArgs += @("-m", "venv", $venvRoot)
+    Invoke-Checked $python.File $venvArgs
+
+    $venvPython = Join-Path $venvRoot "Scripts\python.exe"
+    $sitePackages = Join-Path $venvRoot "Lib\site-packages"
+    if (-not (Test-Path -LiteralPath $sitePackages -PathType Container)) {
+        Stop-Setup "the private Python site-packages directory was not created."
+    }
+    $pthPath = Join-Path $sitePackages "abaqus_codex_assistant.pth"
+    $sourcePath = Join-Path $InstallRoot "src"
+    [System.IO.File]::WriteAllText(
+        $pthPath,
+        $sourcePath + [Environment]::NewLine,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+}
+catch {
+    if (Test-Path -LiteralPath $staging) {
+        Remove-Item -LiteralPath $staging -Recurse -Force
+    }
+    if ($applicationActivated -and (Test-Path -LiteralPath $InstallRoot)) {
+        $failedPath = "$InstallRoot.failed-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        Move-Item -LiteralPath $InstallRoot -Destination $failedPath
+    }
+    if ($null -ne $applicationBackup -and -not (Test-Path -LiteralPath $InstallRoot)) {
+        Move-Item -LiteralPath $applicationBackup -Destination $InstallRoot
+    }
+    throw
+}
+
+$installedPython = Join-Path $InstallRoot ".venv\Scripts\python.exe"
+
+# Keep the Skill replaceable so it can be upgraded independently.
+$skillSource = Join-Path $InstallRoot "skills\abaqus-modeling-guide"
+$skillTarget = Join-Path $UserProfileRoot ".codex\skills\abaqus-modeling-guide"
+New-Item -ItemType Directory -Path (Split-Path -Parent $skillTarget) -Force | Out-Null
+$skillBackup = Backup-Directory $skillTarget
+Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Recurse
+
+# Reuse the Python safety boundary for validation and old-plugin backup.
+Invoke-Checked $installedPython @("-m", "abaqus_codex", "assistant-setup", "--yes")
+
+if ($InstallAbqpy) {
+    Invoke-Checked $installedPython @("-m", "abaqus_codex", "abqpy-setup", "--yes")
+}
+if ($InstallMcp) {
+    Invoke-Checked $installedPython @("-m", "abaqus_codex", "mcp-setup", "--yes")
+}
+
+$desktop = [Environment]::GetFolderPath("Desktop")
+if (-not $NoDesktopShortcut -and -not [string]::IsNullOrWhiteSpace($desktop)) {
+    $shortcutPath = Join-Path $desktop "Abaqus Codex Assistant.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = Join-Path $InstallRoot "Start-Abaqus-Codex-Assistant.cmd"
+    $shortcut.WorkingDirectory = $InstallRoot
+    $shortcut.Description = "Abaqus 2021 Chinese modeling assistant"
+    $shortcut.Save()
+}
+
+$manifest = @{
+    product = "abaqus-codex-assistant"
+    installed_at = (Get-Date).ToString("o")
+    install_root = $InstallRoot
+    user_profile_root = $UserProfileRoot
+    skill_target = $skillTarget
+    plugin_target = (Join-Path $UserProfileRoot "abaqus_plugins\safe_material_action")
+    skill_backup = $skillBackup
+    application_backup = $applicationBackup
+    abaqus_support = "2021-verified"
+    credentials_copied = $false
+}
+$manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $InstallRoot "install-manifest.json") -Encoding UTF8
+
+Write-Host ""
+Write-Host "Installation completed."
+Write-Host "Restart Abaqus/CAE 2021 and Codex before the first real-model test."
+Write-Host "Run the desktop shortcut, then open Environment Check."
+Invoke-Checked $installedPython @("-m", "abaqus_codex", "onboard")

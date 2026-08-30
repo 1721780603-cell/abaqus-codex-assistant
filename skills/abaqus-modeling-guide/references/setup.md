@@ -14,7 +14,9 @@
 
 ## 项目尚未下载
 
-先确认 Git 可用，再询问用户希望把项目放在哪个父目录。得到同意后才执行：
+普通用户优先从 GitHub Releases 下载完整发布包，并按项目根目录 `installer/README.md` 使用统一安装向导。安装器会先只读确认 Abaqus 2021，再安装桌面助手、Skill 和安全插件；MCP 与 abqpy 仍需用户单独选择，因为它们会联网。
+
+需要参与开发时，先确认 Git 可用，再询问用户希望把项目放在哪个父目录。得到同意后才执行：
 
 ```powershell
 git clone https://github.com/1721780603-cell/abaqus-codex-assistant.git
