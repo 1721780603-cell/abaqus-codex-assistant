@@ -200,7 +200,7 @@ class CodexReadOnlyClient:
                 "clientInfo": {
                     "name": "abaqus_codex_assistant",
                     "title": "Abaqus 中文建模助手",
-                    "version": "0.1.0",
+                    "version": "0.2.0a1",
                 }
             },
             timeout_seconds=15.0,
