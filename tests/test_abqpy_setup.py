@@ -13,6 +13,7 @@ from abaqus_codex.abqpy_setup import (
     build_install_command,
     setup_abqpy,
 )
+from abaqus_codex.paths import project_python_executable
 
 
 def usable_abaqus(version: str):
@@ -54,7 +55,10 @@ class AbqpySetupSafetyTests(unittest.TestCase):
         )
         command = build_install_command("abqpy==2025.*", target=target)
 
-        self.assertEqual(command[:4], [sys.executable, "-I", "-m", "pip"])
+        self.assertEqual(
+            command[:4],
+            [str(project_python_executable()), "-I", "-m", "pip"],
+        )
         self.assertEqual(command[-3:], ["--target", str(target), "abqpy==2025.*"])
 
     def test_source_install_command_preserves_existing_python_environment(self):
@@ -62,7 +66,10 @@ class AbqpySetupSafetyTests(unittest.TestCase):
 
         command = build_install_command("abqpy==2021.*")
 
-        self.assertEqual(command[:4], [sys.executable, "-m", "pip", "install"])
+        self.assertEqual(
+            command[:4],
+            [str(project_python_executable()), "-m", "pip", "install"],
+        )
         self.assertNotIn("-I", command)
         self.assertNotIn("--target", command)
 
@@ -135,7 +142,13 @@ class AbqpySetupSafetyTests(unittest.TestCase):
                 command = install_mock.call_args.args[0]
                 self.assertEqual(command[-1], expected_requirement)
                 self.assertEqual(
-                    command[:4], [sys.executable, "-m", "pip", "install"]
+                    command[:4],
+                    [
+                        str(project_python_executable()),
+                        "-m",
+                        "pip",
+                        "install",
+                    ],
                 )
                 self.assertEqual(
                     inspect_abqpy_mock.call_args_list,

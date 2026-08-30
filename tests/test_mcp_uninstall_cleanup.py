@@ -21,6 +21,7 @@ from abaqus_codex.mcp_setup import (
     remove_managed_codex_registration,
     stop_managed_headless_bridge_for_uninstall,
 )
+from abaqus_codex.paths import project_python_executable
 
 
 def managed_payload(target: Path) -> dict[str, object]:
@@ -32,7 +33,7 @@ def managed_payload(target: Path) -> dict[str, object]:
         "name": MCP_SERVER_NAME,
         "transport": {
             "type": "stdio",
-            "command": sys.executable,
+            "command": str(project_python_executable()),
             "args": [str(target / "mcp_guard.py")],
             "env": {
                 "ABAQUS_MCP_HOME": str(target),

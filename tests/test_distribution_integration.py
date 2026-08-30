@@ -259,8 +259,8 @@ class DistributionIntegrationTests(unittest.TestCase):
                 manifest = data / MANIFEST_FILENAME
                 self.assertTrue(manifest.is_file())
                 payload = json.loads(manifest.read_text(encoding="utf-8"))
-                self.assertEqual(payload["user_data_root"], str(data.resolve()))
-                self.assertEqual(payload["codex_home"], str(codex.resolve()))
+                self.assertTrue(Path(payload["user_data_root"]).samefile(data))
+                self.assertTrue(Path(payload["codex_home"]).samefile(codex))
                 self.assertFalse(installed["plugin"]["eligible"])
 
                 removed = integration_remove(confirmed=True, data_root=data)
