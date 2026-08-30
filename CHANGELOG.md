@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+尚无。
+
+## [0.2.0-alpha] - 2026-08-31
+
 ### 新增
 
 - 增加 Windows 统一安装、修复和卸载向导，将桌面助手、Codex Skill 与 Abaqus 2021 安全插件作为同一 Release 分发；MCP 和 abqpy 保持为显式联网选项，不复制账号、Cookie、API Key 或许可证；
