@@ -13,6 +13,7 @@
 - [ ] 涉及用户子程序时，记录 Fortran、Visual Studio 版本及编译/链接成功日志；
 - [ ] 运行全部离线测试；
 - [ ] 构建 wheel 并确认包含 Abaqus 脚本；
+- [ ] 用 Windows PowerShell 5.1 运行 `installer/install.ps1 -WhatIf`，并在隔离用户目录完成一次安装、启动和可恢复卸载；
 - [ ] 在声明支持的 Abaqus 版本上运行真实示例；
 - [ ] 核对 `.sta` 成功标记、结果 JSON 和中文报告；
 - [ ] 搜索密钥、密码、Cookie、许可证信息和大型 Abaqus 文件；

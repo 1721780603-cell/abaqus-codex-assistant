@@ -39,6 +39,12 @@ from abaqus_codex.desktop_assistant.codex_app_server import (
     CodexTurnInterrupted,
     normalize_ai_prompt,
 )
+from abaqus_codex.desktop_assistant.environment_check import (
+    EnvironmentCheckItem,
+    build_environment_items,
+    format_environment_detail,
+    summarize_environment,
+)
 from abaqus_codex.desktop_assistant.material_flow import (
     MaterialCommandError,
     MaterialEditRequest,
@@ -71,6 +77,7 @@ from abaqus_codex.desktop_assistant.safe_action_bridge import (
     SafeActionTimeoutError,
 )
 from abaqus_codex.desktop_assistant.snapshot_source import SnapshotFileSource
+from abaqus_codex.onboarding import inspect_onboarding
 
 
 # 界面采用克制的工程工作台语言：连接状态和确认边界始终比装饰更醒目。
@@ -144,6 +151,7 @@ class DesktopAssistantApp:
         self.codex_status_queue: queue.Queue[CodexStatus] = queue.Queue()
         self.codex_event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.ai_event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.environment_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.refresh_running = False
         self.action_running = False
         self.pending_plan: Optional[dict[str, object]] = None
@@ -155,6 +163,9 @@ class DesktopAssistantApp:
         self.log_lines: list[str] = []
         self.guide_window: Optional[tk.Toplevel] = None
         self.history_window: Optional[tk.Toplevel] = None
+        self.environment_window: Optional[tk.Toplevel] = None
+        self.environment_check_running = False
+        self.environment_items_by_id: dict[str, EnvironmentCheckItem] = {}
         self.latest_codex_status: Optional[CodexStatus] = None
         self.codex_login_process: Optional[object] = None
         self.codex_client: Optional[CodexReadOnlyClient] = None
@@ -473,6 +484,18 @@ class DesktopAssistantApp:
             style="Secondary.TButton",
             command=self._show_history,
         ).grid(row=0, column=1, sticky="w", padx=(self._px(8), 0))
+        self.environment_button = ttk.Button(
+            route_actions,
+            text="环境体检",
+            style="Secondary.TButton",
+            command=self._show_environment_check,
+        )
+        self.environment_button.grid(
+            row=0,
+            column=2,
+            sticky="w",
+            padx=(self._px(8), 0),
+        )
         self.codex_check_button = ttk.Button(
             route_actions,
             text="检查 Codex",
@@ -511,7 +534,7 @@ class DesktopAssistantApp:
         self.codex_account_label.grid(
             row=2,
             column=0,
-            columnspan=2,
+            columnspan=3,
             sticky="ew",
             pady=(self._px(8), 0),
         )
@@ -633,6 +656,250 @@ class DesktopAssistantApp:
             attribute="history_window",
             title="Abaqus 中文建模助手操作记录",
             content=format_history(self.history_store.read()),
+        )
+
+    def _show_environment_check(self) -> None:
+        """打开独立体检窗口，并在首次打开时执行只读检查。"""
+
+        window = self.environment_window
+        if window is not None and window.winfo_exists():
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+            return
+
+        window = tk.Toplevel(self.root)
+        self.environment_window = window
+        window.title("Abaqus Codex Assistant · 环境体检")
+        window.geometry("{0}x{1}".format(self._px(880), self._px(620)))
+        window.minsize(self._px(720), self._px(520))
+        window.configure(background=COLOR_BACKGROUND)
+        window.grid_rowconfigure(1, weight=1)
+        window.grid_columnconfigure(0, weight=1)
+
+        heading = tk.Frame(
+            window,
+            background=COLOR_HEADER,
+            padx=self._px(18),
+            pady=self._px(14),
+        )
+        heading.grid(row=0, column=0, sticky="ew")
+        heading.grid_columnconfigure(0, weight=1)
+        tk.Label(
+            heading,
+            text="环境体检",
+            background=COLOR_HEADER,
+            foreground="#FFFFFF",
+            font=self._font(15, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        self.environment_summary_var = tk.StringVar(
+            value="准备检查本机环境；不会安装软件或修改模型。"
+        )
+        tk.Label(
+            heading,
+            textvariable=self.environment_summary_var,
+            background=COLOR_HEADER,
+            foreground=COLOR_HEADER_MUTED,
+            font=self._font(9),
+            anchor="w",
+        ).grid(row=1, column=0, sticky="ew", pady=(self._px(3), 0))
+
+        content = ttk.Frame(
+            window,
+            style="Assistant.TFrame",
+            padding=self._px(14),
+        )
+        content.grid(row=1, column=0, sticky="nsew")
+        content.grid_rowconfigure(0, weight=3)
+        content.grid_rowconfigure(1, weight=2)
+        content.grid_columnconfigure(0, weight=1)
+
+        self.environment_tree = ttk.Treeview(
+            content,
+            columns=("group", "name", "status"),
+            show="headings",
+            selectmode="browse",
+            height=12,
+        )
+        self.environment_tree.heading("group", text="层级")
+        self.environment_tree.heading("name", text="检查项")
+        self.environment_tree.heading("status", text="状态")
+        self.environment_tree.column(
+            "group", width=self._px(130), anchor="w", stretch=False
+        )
+        self.environment_tree.column(
+            "name", width=self._px(230), anchor="w", stretch=True
+        )
+        self.environment_tree.column(
+            "status", width=self._px(130), anchor="center", stretch=False
+        )
+        self.environment_tree.tag_configure(
+            "success", foreground=COLOR_SUCCESS
+        )
+        self.environment_tree.tag_configure(
+            "warning", foreground=COLOR_WARNING
+        )
+        self.environment_tree.tag_configure("error", foreground=COLOR_ERROR)
+        self.environment_tree.tag_configure(
+            "optional", foreground=COLOR_MUTED
+        )
+        self.environment_tree.grid(row=0, column=0, sticky="nsew")
+        self.environment_tree.bind(
+            "<<TreeviewSelect>>", self._show_selected_environment_detail
+        )
+
+        self.environment_detail_text = scrolledtext.ScrolledText(
+            content,
+            wrap="word",
+            height=9,
+            padx=self._px(12),
+            pady=self._px(12),
+            relief="flat",
+            borderwidth=0,
+            background=COLOR_PANEL,
+            foreground=COLOR_TEXT,
+            selectbackground="#BBD6E3",
+            font=self._font(10),
+            takefocus=True,
+        )
+        self.environment_detail_text.grid(
+            row=1,
+            column=0,
+            sticky="nsew",
+            pady=(self._px(10), 0),
+        )
+        self._set_readonly_text(
+            self.environment_detail_text,
+            "正在准备首次只读检查……",
+        )
+
+        actions = ttk.Frame(window, style="Assistant.TFrame")
+        actions.grid(
+            row=2,
+            column=0,
+            sticky="ew",
+            padx=self._px(14),
+            pady=(0, self._px(14)),
+        )
+        actions.grid_columnconfigure(0, weight=1)
+        self.environment_refresh_button = ttk.Button(
+            actions,
+            text="重新检查",
+            style="Accent.TButton",
+            command=self._start_environment_check,
+        )
+        self.environment_refresh_button.grid(row=0, column=1, sticky="e")
+        ttk.Button(
+            actions,
+            text="关闭",
+            style="Secondary.TButton",
+            command=window.destroy,
+        ).grid(row=0, column=2, sticky="e", padx=(self._px(8), 0))
+        window.bind("<Escape>", lambda _event: window.destroy())
+        self._start_environment_check()
+
+    def _start_environment_check(self) -> None:
+        """启动统一只读体检；任何 Tk 控件只在主线程更新。"""
+
+        if self.environment_check_running:
+            return
+        window = self.environment_window
+        if window is None or not window.winfo_exists():
+            return
+        self.environment_check_running = True
+        self.environment_refresh_button.configure(
+            text="正在检查", state="disabled"
+        )
+        self.environment_summary_var.set(
+            "正在检查 Abaqus、Python、Codex、MCP、Git 和可选科研工具……"
+        )
+        self.environment_items_by_id = {}
+        for item_id in self.environment_tree.get_children():
+            self.environment_tree.delete(item_id)
+        self._set_readonly_text(
+            self.environment_detail_text,
+            "检查在后台进行，主窗口和 Abaqus 不会因此被修改。",
+        )
+        threading.Thread(
+            target=self._environment_check_worker,
+            daemon=True,
+        ).start()
+
+    def _environment_check_worker(self) -> None:
+        """复用首次向导和 Codex 状态检查，并隐藏内部异常。"""
+
+        try:
+            result = inspect_onboarding()
+            codex_status = inspect_codex_status()
+            items = build_environment_items(result, codex_status)
+            payload = {
+                "items": items,
+                "summary": summarize_environment(items),
+            }
+        except Exception:
+            self.environment_queue.put(
+                (
+                    "error",
+                    "环境体检遇到未预期的本地错误；没有安装软件，也没有修改模型。",
+                )
+            )
+            return
+        self.environment_queue.put(("success", payload))
+
+    def _apply_environment_event(self, event_name: str, payload: object) -> None:
+        """把后台体检结果安全写回仍然打开的窗口。"""
+
+        self.environment_check_running = False
+        window = self.environment_window
+        if window is None or not window.winfo_exists():
+            return
+        self.environment_refresh_button.configure(
+            text="重新检查", state="normal"
+        )
+        if event_name != "success" or not isinstance(payload, dict):
+            self.environment_summary_var.set("体检未完成")
+            self._set_readonly_text(
+                self.environment_detail_text,
+                str(payload),
+            )
+            return
+
+        items = payload.get("items")
+        if not isinstance(items, list):
+            self.environment_summary_var.set("体检结果格式无效")
+            return
+        self.environment_summary_var.set(str(payload.get("summary") or "检查完成"))
+        for index, item in enumerate(items):
+            if not isinstance(item, EnvironmentCheckItem):
+                continue
+            item_id = "environment_{0}".format(index)
+            self.environment_items_by_id[item_id] = item
+            self.environment_tree.insert(
+                "",
+                "end",
+                iid=item_id,
+                values=(item.group, item.name, item.status),
+                tags=(item.tone,),
+            )
+        children = self.environment_tree.get_children()
+        if children:
+            self.environment_tree.selection_set(children[0])
+            self.environment_tree.focus(children[0])
+            self.environment_tree.see(children[0])
+            self._show_selected_environment_detail()
+
+    def _show_selected_environment_detail(self, _event: object = None) -> None:
+        """显示当前选中检查项的解释和一个明确下一步。"""
+
+        selection = self.environment_tree.selection()
+        if not selection:
+            return
+        item = self.environment_items_by_id.get(selection[0])
+        if item is None:
+            return
+        self._set_readonly_text(
+            self.environment_detail_text,
+            format_environment_detail(item),
         )
 
     def _record_history(self, *, title: str, status: str, details: str) -> None:
@@ -1041,6 +1308,12 @@ class DesktopAssistantApp:
             while True:
                 event_name, payload = self.ai_event_queue.get_nowait()
                 self._apply_ai_event(event_name, payload)
+        except queue.Empty:
+            pass
+        try:
+            while True:
+                event_name, payload = self.environment_queue.get_nowait()
+                self._apply_environment_event(event_name, payload)
         except queue.Empty:
             pass
         self.root.after(100, self._drain_result_queue)
