@@ -26,6 +26,19 @@ from abaqus_codex.desktop_assistant.assistant_history import (
     format_history,
 )
 from abaqus_codex.desktop_assistant.beginner_guide import format_beginner_guide
+from abaqus_codex.desktop_assistant.codex_status import (
+    CodexLoginError,
+    CodexStatus,
+    inspect_codex_status,
+    start_codex_login,
+)
+from abaqus_codex.desktop_assistant.codex_app_server import (
+    CodexAccountInfo,
+    CodexAppServerError,
+    CodexReadOnlyClient,
+    CodexTurnInterrupted,
+    normalize_ai_prompt,
+)
 from abaqus_codex.desktop_assistant.material_flow import (
     MaterialCommandError,
     MaterialEditRequest,
@@ -38,6 +51,7 @@ from abaqus_codex.desktop_assistant.rectangle_flow import (
     RectangleCreateRequest,
     build_rectangle_plan,
     format_rectangle_plan,
+    request_from_ai_extraction,
 )
 from abaqus_codex.desktop_assistant.guided_rectangle_flow import (
     DEFAULT_COMMANDS,
@@ -75,6 +89,11 @@ COLOR_ERROR = "#A13C3C"
 COLOR_DISABLED = "#D9E1E6"
 PROJECT_OWNER = "1721780603-cell"
 PROJECT_URL = "https://github.com/1721780603-cell/abaqus-codex-assistant"
+REASONING_MODE_EFFORT = {
+    "快速": "low",
+    "标准": "medium",
+    "深度": "high",
+}
 COPYRIGHT_NOTICE = "© 2026 1721780603-cell · MIT"
 BASE_DPI = 96.0
 BASE_WINDOW_SIZE = (1120, 760)
@@ -122,6 +141,9 @@ class DesktopAssistantApp:
         self.font_family = "TkDefaultFont"
         self.result_queue: queue.Queue[AssistantViewState] = queue.Queue()
         self.action_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.codex_status_queue: queue.Queue[CodexStatus] = queue.Queue()
+        self.codex_event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.ai_event_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.refresh_running = False
         self.action_running = False
         self.pending_plan: Optional[dict[str, object]] = None
@@ -133,8 +155,19 @@ class DesktopAssistantApp:
         self.log_lines: list[str] = []
         self.guide_window: Optional[tk.Toplevel] = None
         self.history_window: Optional[tk.Toplevel] = None
+        self.latest_codex_status: Optional[CodexStatus] = None
+        self.codex_login_process: Optional[object] = None
+        self.codex_client: Optional[CodexReadOnlyClient] = None
+        self.codex_live_connected = False
+        self.ai_running = False
+        self.ai_response_buffer = ""
 
         self.connection_var = tk.StringVar(value="正在检查")
+        self.codex_var = tk.StringVar(value="Codex 正在检查")
+        self.codex_account_var = tk.StringVar(
+            value="账号：尚未通过 App Server 实时验证"
+        )
+        self.reasoning_mode_var = tk.StringVar(value="标准")
         self.goal_var = tk.StringVar(
             value="当前小目标：第 1/10 步，用中文创建二维矩形板几何"
         )
@@ -144,9 +177,13 @@ class DesktopAssistantApp:
         self._configure_styles()
         self._build_layout()
         self._bind_shortcuts()
+        self.root.protocol("WM_DELETE_WINDOW", self._close_application)
 
-        self._append_log("助手已启动；AI 未启用，几何和材料写操作等待明确确认。")
+        self._append_log(
+            "助手已启动；只读 AI 咨询可用，所有模型写操作仍等待明确确认。"
+        )
         self.root.after(150, self._start_refresh)
+        self.root.after(200, self._start_codex_status_check)
         self.root.after(100, self._drain_result_queue)
         # 初学者打开窗口后可以直接输入，不必先用鼠标寻找输入框。
         self.root.after(250, self.command_text.focus_set)
@@ -332,6 +369,21 @@ class DesktopAssistantApp:
             pady=self._px(7),
             font=self._font(STATUS_FONT_SIZE),
         ).grid(row=0, column=2, rowspan=2)
+        self.codex_label = tk.Label(
+            header,
+            textvariable=self.codex_var,
+            background=COLOR_WARNING,
+            foreground="#FFFFFF",
+            padx=self._px(13),
+            pady=self._px(7),
+            font=self._font(STATUS_FONT_SIZE),
+        )
+        self.codex_label.grid(
+            row=0,
+            column=3,
+            rowspan=2,
+            padx=(self._px(8), 0),
+        )
 
     def _panel(self, parent: tk.Widget, column: int) -> tk.Frame:
         """创建有明确边界但不过度装饰的主工作区。"""
@@ -385,7 +437,7 @@ class DesktopAssistantApp:
                 "① 几何 → ② 材料 → ③ 截面\n"
                 "④ 装配 → ⑤ 分析步 → ⑥ 相互作用\n"
                 "⑦ 边界与载荷 → ⑧ 网格 → ⑨ Job → ⑩ 结果与报告\n"
-                "离线向导：本轮目标全部可用｜AI / 联网：尚未接入"
+                "离线向导：本轮目标全部可用｜AI 咨询：只读、暂不联网"
             ),
             background="#EAF4F7",
             foreground=COLOR_TEXT,
@@ -421,6 +473,48 @@ class DesktopAssistantApp:
             style="Secondary.TButton",
             command=self._show_history,
         ).grid(row=0, column=1, sticky="w", padx=(self._px(8), 0))
+        self.codex_check_button = ttk.Button(
+            route_actions,
+            text="检查 Codex",
+            style="Secondary.TButton",
+            command=self._start_codex_status_check,
+        )
+        self.codex_check_button.grid(
+            row=1,
+            column=0,
+            sticky="w",
+            pady=(self._px(8), 0),
+        )
+        self.codex_login_button = ttk.Button(
+            route_actions,
+            text="登录 Codex",
+            style="Secondary.TButton",
+            command=self._handle_codex_login,
+            state="disabled",
+        )
+        self.codex_login_button.grid(
+            row=1,
+            column=1,
+            sticky="w",
+            padx=(self._px(8), 0),
+            pady=(self._px(8), 0),
+        )
+        self.codex_account_label = tk.Label(
+            route_actions,
+            textvariable=self.codex_account_var,
+            background=COLOR_PANEL,
+            foreground=COLOR_MUTED,
+            justify="left",
+            anchor="w",
+            font=self._font(9),
+        )
+        self.codex_account_label.grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(self._px(8), 0),
+        )
 
         self.summary_text = scrolledtext.ScrolledText(
             panel,
@@ -566,16 +660,15 @@ class DesktopAssistantApp:
         """构建中文输入、修改计划和安全执行日志区域。"""
 
         panel = self._panel(parent, 1)
-        panel.grid_rowconfigure(6, weight=1)
-        panel.grid_rowconfigure(9, weight=1)
+        panel.grid_rowconfigure(5, weight=1)
         ttk.Label(panel, text="中文建模命令", style="PanelTitle.TLabel").grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
             panel,
             text=(
-                "本阶段只做本地固定句式识别。未联网、未调用 AI、输入未上传；"
-                "发送只生成计划，明确应用后才修改工作副本。"
+                "“询问 Codex”使用当前用户自己的 ChatGPT 账号额度；"
+                "首版关闭工具和联网，只提供中文咨询。AI 答复不会自动修改模型。"
             ),
             style="Hint.TLabel",
         ).grid(
@@ -609,7 +702,7 @@ class DesktopAssistantApp:
 
         ttk.Label(
             panel,
-            text="快捷键：Ctrl+Enter 生成计划；F5 刷新模型摘要。",
+            text="快捷键：Ctrl+Enter 询问 Codex；F5 刷新模型摘要。",
             style="Hint.TLabel",
         ).grid(row=3, column=0, sticky="w", pady=(self._px(5), 0))
 
@@ -621,19 +714,81 @@ class DesktopAssistantApp:
             pady=(self._px(10), self._px(12)),
         )
         button_row.grid_columnconfigure(3, weight=1)
+        ttk.Label(
+            button_row,
+            text="AI 推理档位：",
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, self._px(7)))
+        self.reasoning_mode_combo = ttk.Combobox(
+            button_row,
+            textvariable=self.reasoning_mode_var,
+            values=tuple(REASONING_MODE_EFFORT),
+            state="readonly",
+            width=8,
+            takefocus=False,
+        )
+        self.reasoning_mode_combo.grid(
+            row=0, column=1, sticky="w", pady=(0, self._px(7))
+        )
+        ttk.Label(
+            button_row,
+            text="快速响应更快；深度适合复杂方案",
+            style="Hint.TLabel",
+        ).grid(
+            row=0,
+            column=2,
+            columnspan=2,
+            sticky="w",
+            padx=(self._px(8), 0),
+            pady=(0, self._px(7)),
+        )
         self.send_button = ttk.Button(
             button_row,
-            text="生成计划",
+            text="询问 Codex",
             style="Accent.TButton",
             command=self._handle_send,
         )
-        self.send_button.grid(row=0, column=0, sticky="w")
+        self.send_button.grid(row=1, column=0, sticky="w")
+        self.stop_ai_button = ttk.Button(
+            button_row,
+            text="停止回答",
+            style="Disabled.TButton",
+            command=self._handle_stop_ai,
+            state="disabled",
+        )
+        self.stop_ai_button.grid(
+            row=1, column=1, sticky="w", padx=(self._px(8), 0)
+        )
+        self.ai_plan_button = ttk.Button(
+            button_row,
+            text="生成 AI 计划",
+            style="Secondary.TButton",
+            command=self._handle_ai_plan,
+        )
+        self.ai_plan_button.grid(
+            row=1, column=2, sticky="w", padx=(self._px(8), 0)
+        )
+        self.local_plan_button = ttk.Button(
+            button_row,
+            text="生成离线计划",
+            style="Secondary.TButton",
+            command=self._handle_local_plan,
+        )
+        self.local_plan_button.grid(
+            row=2, column=0, sticky="w", pady=(self._px(7), 0)
+        )
         ttk.Button(
             button_row,
             text="清空",
             style="Secondary.TButton",
             command=self._clear_command,
-        ).grid(row=0, column=1, sticky="w", padx=(self._px(8), 0))
+        ).grid(
+            row=2,
+            column=1,
+            sticky="w",
+            padx=(self._px(8), 0),
+            pady=(self._px(7), 0),
+        )
         self.apply_button = ttk.Button(
             button_row,
             text="应用修改",
@@ -642,7 +797,11 @@ class DesktopAssistantApp:
             state="disabled",
         )
         self.apply_button.grid(
-            row=0, column=2, sticky="w", padx=(self._px(8), 0)
+            row=2,
+            column=2,
+            sticky="w",
+            padx=(self._px(8), 0),
+            pady=(self._px(7), 0),
         )
         self.safety_label = tk.Label(
             button_row,
@@ -652,21 +811,50 @@ class DesktopAssistantApp:
             font=self._font(9, "bold"),
         )
         self.safety_label.grid(
-            row=1,
+            row=3,
             column=0,
             columnspan=4,
             sticky="w",
             pady=(self._px(8), 0),
         )
 
-        ttk.Label(
-            panel,
-            text="修改计划（应用前不会修改模型）",
-            style="PanelTitle.TLabel",
-        ).grid(row=5, column=0, sticky="w")
+        self.output_notebook = ttk.Notebook(panel)
+        self.output_notebook.grid(row=5, column=0, sticky="nsew")
+        ai_tab = ttk.Frame(self.output_notebook, style="Panel.TFrame")
+        plan_tab = ttk.Frame(self.output_notebook, style="Panel.TFrame")
+        log_tab = ttk.Frame(self.output_notebook, style="Panel.TFrame")
+        for tab in (ai_tab, plan_tab, log_tab):
+            tab.grid_rowconfigure(0, weight=1)
+            tab.grid_columnconfigure(0, weight=1)
+        self.output_notebook.add(ai_tab, text="AI 对话")
+        self.output_notebook.add(plan_tab, text="修改计划")
+        self.output_notebook.add(log_tab, text="高级日志")
 
+        self.ai_response_text = scrolledtext.ScrolledText(
+            ai_tab,
+            wrap="word",
+            height=14,
+            padx=self._px(12),
+            pady=self._px(12),
+            relief="flat",
+            borderwidth=0,
+            background="#F7F9FA",
+            foreground=COLOR_TEXT,
+            selectbackground="#BBD6E3",
+            font=self._font(10),
+            takefocus=False,
+        )
+        self.ai_response_text.grid(row=0, column=0, sticky="nsew")
+        self._set_readonly_text(
+            self.ai_response_text,
+            (
+                "尚未开始 AI 咨询。\n\n"
+                "例如输入“我想分析边坡稳定”，Codex 会先追问缺少的工程参数。"
+                "本区域只显示建议，不代表 Abaqus 已被修改。"
+            ),
+        )
         self.response_text = scrolledtext.ScrolledText(
-            panel,
+            plan_tab,
             wrap="word",
             height=10,
             padx=self._px(12),
@@ -680,28 +868,15 @@ class DesktopAssistantApp:
             takefocus=False,
         )
         self.response_text.grid(
-            row=6, column=0, sticky="nsew", pady=(self._px(6), 0)
+            row=0, column=0, sticky="nsew"
         )
         self._set_readonly_text(
             self.response_text,
             "尚未生成修改计划。应用按钮保持锁定。",
         )
 
-        ttk.Label(panel, text="高级本地日志", style="PanelTitle.TLabel").grid(
-            row=7, column=0, sticky="w", pady=(self._px(14), 0)
-        )
-        ttk.Label(
-            panel,
-            text="日志不记录完整命令、模型路径或凭据。",
-            style="Hint.TLabel",
-        ).grid(
-            row=8,
-            column=0,
-            sticky="w",
-            pady=(self._px(3), self._px(6)),
-        )
         self.log_text = scrolledtext.ScrolledText(
-            panel,
+            log_tab,
             wrap="word",
             height=7,
             padx=self._px(10),
@@ -714,7 +889,7 @@ class DesktopAssistantApp:
             font=self._font(9),
             takefocus=False,
         )
-        self.log_text.grid(row=9, column=0, sticky="nsew")
+        self.log_text.grid(row=0, column=0, sticky="nsew")
         self._set_readonly_text(self.log_text, "")
 
     def _build_footer(self) -> None:
@@ -798,6 +973,10 @@ class DesktopAssistantApp:
         self.refresh_running = True
         self.refresh_button.configure(state="disabled")
         self.send_button.configure(state="disabled")
+        if hasattr(self, "ai_plan_button"):
+            self.ai_plan_button.configure(state="disabled")
+        if hasattr(self, "local_plan_button"):
+            self.local_plan_button.configure(state="disabled")
         self.connection_var.set("正在读取")
         self.connection_label.configure(background=COLOR_WARNING)
         mode_name = getattr(self.bridge, "mode_name", "只读来源")
@@ -846,7 +1025,243 @@ class DesktopAssistantApp:
                 self._apply_action_event(event_name, payload)
         except queue.Empty:
             pass
+        try:
+            while True:
+                codex_status = self.codex_status_queue.get_nowait()
+                self._apply_codex_status(codex_status)
+        except queue.Empty:
+            pass
+        try:
+            while True:
+                event_name, payload = self.codex_event_queue.get_nowait()
+                self._apply_codex_event(event_name, payload)
+        except queue.Empty:
+            pass
+        try:
+            while True:
+                event_name, payload = self.ai_event_queue.get_nowait()
+                self._apply_ai_event(event_name, payload)
+        except queue.Empty:
+            pass
         self.root.after(100, self._drain_result_queue)
+
+    def _start_codex_status_check(self) -> None:
+        """后台检查登录缓存，并通过 account/read 验证真实连接。"""
+
+        self.codex_var.set("Codex 正在验证")
+        self.codex_label.configure(background=COLOR_WARNING)
+        self.codex_account_var.set("账号：正在连接 App Server 实时验证")
+        self.codex_account_label.configure(foreground=COLOR_WARNING)
+        if hasattr(self, "codex_check_button"):
+            self.codex_check_button.configure(state="disabled")
+        worker = threading.Thread(
+            target=self._codex_status_worker,
+            daemon=True,
+        )
+        worker.start()
+
+    def _codex_status_worker(self) -> None:
+        """先查登录缓存，再与 App Server 实时交换账号信息。"""
+
+        status = inspect_codex_status()
+        self.codex_status_queue.put(status)
+        if not status.authenticated:
+            return
+        try:
+            client = self.codex_client
+            if client is None:
+                client = CodexReadOnlyClient()
+                self.codex_client = client
+            client.start()
+            account_info = client.account_info
+            if account_info is None:
+                raise CodexAppServerError("App Server 没有返回账号信息。")
+        except CodexAppServerError as error:
+            client = self.codex_client
+            self.codex_client = None
+            if client is not None:
+                client.close()
+            self.codex_event_queue.put(("connection_error", str(error)))
+            return
+        except Exception:
+            client = self.codex_client
+            self.codex_client = None
+            if client is not None:
+                client.close()
+            self.codex_event_queue.put(
+                ("connection_error", "App Server 实时验证遇到本地错误。")
+            )
+            return
+        self.codex_event_queue.put(
+            (
+                "account_verified",
+                {
+                    "account": account_info,
+                    "session_resumed": client.session_resumed,
+                },
+            )
+        )
+
+    def _apply_codex_status(self, status: CodexStatus) -> None:
+        """显示登录方式和下一步提示，不显示命令路径或凭据。"""
+
+        colors = {
+            "online": COLOR_SUCCESS,
+            "offline": COLOR_ERROR,
+            "error": COLOR_ERROR,
+            "warning": COLOR_WARNING,
+        }
+        if status.authenticated:
+            self.codex_var.set("Codex 正在连接")
+            self.codex_label.configure(background=COLOR_WARNING)
+        else:
+            self.codex_live_connected = False
+            self.codex_var.set(status.label)
+            self.codex_label.configure(
+                background=colors.get(status.tone, COLOR_WARNING)
+            )
+            self.codex_account_var.set("账号：未通过 App Server 实时验证")
+            self.codex_account_label.configure(foreground=COLOR_ERROR)
+        self._append_log(status.guidance)
+        self.latest_codex_status = status
+        self.codex_check_button.configure(state="normal")
+        if status.authenticated:
+            self.codex_login_button.configure(
+                text="Codex 已登录",
+                state="disabled",
+            )
+        elif status.installed and self.codex_login_process is None:
+            self.codex_login_button.configure(
+                text="登录 Codex",
+                state="normal",
+            )
+        else:
+            self.codex_login_button.configure(
+                text="登录 Codex",
+                state="disabled",
+            )
+
+    def _handle_codex_login(self) -> None:
+        """经用户确认后启动官方浏览器登录，不接触账号密码。"""
+
+        status = self.latest_codex_status
+        if status is None:
+            self._start_codex_status_check()
+            return
+        if status.authenticated:
+            messagebox.showinfo("Codex 登录", "Codex 已经登录，无需重复操作。")
+            return
+        if not status.installed:
+            messagebox.showwarning(
+                "未找到 Codex",
+                "请先安装 Codex；本程序不会代替用户创建或共享 AI 账号。",
+            )
+            return
+        confirmed = messagebox.askyesno(
+            "使用自己的 ChatGPT 账号登录",
+            (
+                "将启动官方 codex login，并打开 OpenAI 浏览器登录页面。\n\n"
+                "请使用你自己的 ChatGPT 账号。程序不会读取密码或令牌，"
+                "也不会自动使用 API Key。是否继续？"
+            ),
+        )
+        if not confirmed:
+            return
+        self.codex_login_button.configure(
+            text="等待浏览器登录",
+            state="disabled",
+        )
+        self.codex_check_button.configure(state="disabled")
+        self.codex_var.set("Codex 等待登录")
+        self.codex_label.configure(background=COLOR_WARNING)
+        worker = threading.Thread(
+            target=self._codex_login_worker,
+            daemon=True,
+        )
+        worker.start()
+
+    def _codex_login_worker(self) -> None:
+        """只启动官方登录子进程，启动结果通过队列返回主线程。"""
+
+        try:
+            process = start_codex_login()
+        except CodexLoginError as error:
+            self.codex_event_queue.put(("login_error", str(error)))
+            return
+        except Exception:
+            self.codex_event_queue.put(
+                ("login_error", "Codex 登录遇到未预期的本地错误。")
+            )
+            return
+        self.codex_event_queue.put(("login_started", process))
+
+    def _apply_codex_event(self, event_name: str, payload: object) -> None:
+        """处理登录和实时账号验证事件，不显示完整账号凭据。"""
+
+        if event_name == "login_started":
+            self.codex_login_process = payload
+            self._append_log("官方 Codex 登录已启动，请在浏览器中完成授权。")
+            self.root.after(1000, self._poll_codex_login)
+            return
+        if event_name == "account_verified" and isinstance(payload, dict):
+            account_info = payload.get("account")
+            if not isinstance(account_info, CodexAccountInfo):
+                self._append_log("Codex 账号事件格式无效。")
+                return
+            session_resumed = bool(payload.get("session_resumed"))
+            self.codex_live_connected = True
+            self.codex_var.set("Codex 已连接")
+            self.codex_label.configure(background=COLOR_SUCCESS)
+            self.codex_account_var.set(
+                "账号：{0}｜专属对话：{1}".format(
+                    account_info.display_text,
+                    "已恢复" if session_resumed else "新建",
+                )
+            )
+            self.codex_account_label.configure(foreground=COLOR_SUCCESS)
+            self.codex_check_button.configure(state="normal")
+            self.codex_login_button.configure(
+                text="Codex 已登录",
+                state="disabled",
+            )
+            self._append_log(
+                "Codex App Server 已实时连接；{0}专属对话。".format(
+                    "已恢复" if session_resumed else "已新建"
+                )
+            )
+            return
+        if event_name == "connection_error":
+            self.codex_live_connected = False
+            self.codex_var.set("Codex 连接失败")
+            self.codex_label.configure(background=COLOR_ERROR)
+            self.codex_account_var.set("账号：登录缓存存在，但 App Server 未连通")
+            self.codex_account_label.configure(foreground=COLOR_ERROR)
+            self.codex_check_button.configure(state="normal")
+            self._append_log(str(payload))
+            return
+        self.codex_login_process = None
+        self.codex_var.set("Codex 登录未启动")
+        self.codex_label.configure(background=COLOR_ERROR)
+        self.codex_check_button.configure(state="normal")
+        self.codex_login_button.configure(text="重新登录", state="normal")
+        self._append_log(str(payload))
+
+    def _poll_codex_login(self) -> None:
+        """等待官方进程结束后重新执行只读登录检查。"""
+
+        process = self.codex_login_process
+        if process is None:
+            return
+        try:
+            return_code = process.poll()
+        except (OSError, AttributeError):
+            return_code = 1
+        if return_code is None:
+            self.root.after(1000, self._poll_codex_login)
+            return
+        self.codex_login_process = None
+        self._append_log("Codex 登录窗口已结束，正在重新检查账号状态。")
+        self._start_codex_status_check()
 
     def _apply_state(self, state: AssistantViewState) -> None:
         """根据连接结果更新状态色、摘要和安全日志。"""
@@ -876,18 +1291,384 @@ class DesktopAssistantApp:
         self.latest_state = state
         self.refresh_running = False
         self.refresh_button.configure(state="normal")
-        self.send_button.configure(state="normal")
+        if not self.ai_running:
+            self.send_button.configure(state="normal")
+            self.ai_plan_button.configure(state="normal")
+            self.local_plan_button.configure(state="normal")
 
     def _handle_send(self) -> None:
-        """本地识别查看或材料计划请求，不把规则匹配伪装成 AI。"""
+        """把用户问题发送到只读 Codex 会话，不生成执行计划。"""
 
-        if self.refresh_running or self.action_running:
+        if self.refresh_running or self.action_running or self.ai_running:
+            return
+        prompt = normalize_ai_prompt(
+            self.command_text.get("1.0", "end-1c")
+        )
+        if not prompt:
+            self._set_readonly_text(
+                self.ai_response_text,
+                "请输入需要咨询的 Abaqus 问题。",
+            )
+            self.output_notebook.select(0)
+            return
+        status = self.latest_codex_status
+        if status is None or not status.authenticated:
+            self._set_readonly_text(
+                self.ai_response_text,
+                (
+                    "Codex 尚未确认登录。\n\n"
+                    "请先点击左侧“检查 Codex”或“登录 Codex”，"
+                    "再使用自己的 ChatGPT 账号额度咨询。"
+                ),
+            )
+            self.output_notebook.select(0)
+            return
+        if not self.codex_live_connected:
+            self._set_readonly_text(
+                self.ai_response_text,
+                (
+                    "登录缓存存在，但 Codex App Server 尚未实时连通。\n\n"
+                    "请点击左侧“检查 Codex”，看到绿色“Codex 已连接”"
+                    "和脱敏账号后再提问。"
+                ),
+            )
+            self.output_notebook.select(0)
+            return
+
+        self._clear_pending_plan()
+        effort = REASONING_MODE_EFFORT.get(
+            self.reasoning_mode_var.get(), "medium"
+        )
+        self.ai_running = True
+        self.ai_response_buffer = ""
+        self.send_button.configure(text="Codex 正在回答", state="disabled")
+        self.stop_ai_button.configure(
+            text="停止回答",
+            style="Accent.TButton",
+            state="normal",
+        )
+        self.ai_plan_button.configure(state="disabled")
+        self.local_plan_button.configure(state="disabled")
+        self.reasoning_mode_combo.configure(state="disabled")
+        self.refresh_button.configure(state="disabled")
+        self._set_readonly_text(
+            self.ai_response_text,
+            "正在连接 Codex，请稍候……",
+        )
+        self._set_readonly_text(
+            self.response_text,
+            (
+                "本次内容正在进行 AI 咨询，尚未生成可执行修改计划。\n\n"
+                "应用按钮保持锁定。"
+            ),
+        )
+        self.output_notebook.select(0)
+        self.safety_label.configure(
+            text="AI 咨询中｜不会自动修改模型",
+            foreground=COLOR_WARNING,
+        )
+        self._append_log(
+            "已向只读 Codex 会话发送咨询；推理档位 {0}，未发送模型文件。".format(
+                self.reasoning_mode_var.get()
+            )
+        )
+        worker = threading.Thread(
+            target=self._ai_worker,
+            args=(prompt, effort),
+            daemon=True,
+        )
+        worker.start()
+
+    def _handle_ai_plan(self) -> None:
+        """请 Codex 提取矩形参数，但由本地代码生成最终白名单计划。"""
+
+        if self.refresh_running or self.action_running or self.ai_running:
+            return
+        prompt = normalize_ai_prompt(self.command_text.get("1.0", "end-1c"))
+        if not prompt:
+            self._set_readonly_text(self.response_text, "请输入需要建模的中文需求。")
+            self.output_notebook.select(1)
+            return
+        status = self.latest_codex_status
+        if status is None or not status.authenticated or not self.codex_live_connected:
+            self._set_readonly_text(
+                self.ai_response_text,
+                "请先点击左侧“检查 Codex”，确认显示绿色实时连接和脱敏账号。",
+            )
+            self.output_notebook.select(0)
+            return
+
+        self._clear_pending_plan()
+        effort = REASONING_MODE_EFFORT.get(
+            self.reasoning_mode_var.get(), "medium"
+        )
+        self.ai_running = True
+        self.ai_response_buffer = ""
+        self.send_button.configure(state="disabled")
+        self.ai_plan_button.configure(text="AI 正在识别", state="disabled")
+        self.stop_ai_button.configure(
+            text="停止回答", style="Accent.TButton", state="normal"
+        )
+        self.local_plan_button.configure(state="disabled")
+        self.reasoning_mode_combo.configure(state="disabled")
+        self.refresh_button.configure(state="disabled")
+        self._set_readonly_text(
+            self.ai_response_text,
+            "Codex 正在提取矩形板参数；此时不会修改 Abaqus。",
+        )
+        self._set_readonly_text(
+            self.response_text,
+            "正在生成受限制的 AI 计划。应用按钮保持锁定。",
+        )
+        self.output_notebook.select(0)
+        self.safety_label.configure(
+            text="AI 正在识别参数｜不会自动修改模型",
+            foreground=COLOR_WARNING,
+        )
+        self._append_log("已请求 Codex 提取矩形参数；未发送模型文件。")
+        threading.Thread(
+            target=self._ai_plan_worker,
+            args=(prompt, effort),
+            daemon=True,
+        ).start()
+
+    def _ai_plan_worker(self, prompt: str, effort: str) -> None:
+        """后台获取结构化参数；Tk 控件仍只在主线程更新。"""
+
+        try:
+            if self.codex_client is None:
+                self.codex_client = CodexReadOnlyClient()
+            extraction = self.codex_client.extract_rectangle(
+                prompt, effort=effort
+            )
+        except CodexTurnInterrupted as error:
+            self.ai_event_queue.put(("interrupted", str(error)))
+            return
+        except CodexAppServerError as error:
+            self.ai_event_queue.put(("error", str(error)))
+            return
+        except Exception:
+            self.ai_event_queue.put(
+                ("error", "AI 参数识别遇到未预期的本地错误。")
+            )
+            return
+        self.ai_event_queue.put(
+            ("rectangle_extracted", {"extraction": extraction, "prompt": prompt})
+        )
+
+    def _ai_worker(self, prompt: str, effort: str) -> None:
+        """后台等待流式答复；Tk 控件只由主线程更新。"""
+
+        try:
+            if self.codex_client is None:
+                self.codex_client = CodexReadOnlyClient()
+            answer = self.codex_client.ask(
+                prompt,
+                on_delta=lambda delta: self.ai_event_queue.put(
+                    ("delta", delta)
+                ),
+                effort=effort,
+            )
+        except CodexTurnInterrupted as error:
+            self.ai_event_queue.put(("interrupted", str(error)))
+            return
+        except CodexAppServerError as error:
+            self.ai_event_queue.put(("error", str(error)))
+            return
+        except Exception:
+            self.ai_event_queue.put(
+                ("error", "AI 咨询遇到未预期的本地错误，请稍后重试。")
+            )
+            return
+        self.ai_event_queue.put(
+            ("completed", {"answer": answer, "prompt": prompt})
+        )
+
+    def _handle_stop_ai(self) -> None:
+        """用户点击后只中断当前 Codex 回答，不关闭 Abaqus。"""
+
+        if not self.ai_running:
+            return
+        self.stop_ai_button.configure(
+            text="正在停止",
+            state="disabled",
+        )
+        self._append_log("用户请求停止当前 Codex 回答。")
+        threading.Thread(
+            target=self._stop_ai_worker,
+            daemon=True,
+        ).start()
+
+    def _stop_ai_worker(self) -> None:
+        """后台调用官方 turn/interrupt，避免阻塞 Tk。"""
+
+        client = self.codex_client
+        if client is None:
+            self.ai_event_queue.put(
+                ("stop_error", "当前没有可停止的 Codex 会话。")
+            )
+            return
+        try:
+            client.interrupt(timeout_seconds=10.0)
+        except CodexAppServerError as error:
+            self.ai_event_queue.put(("stop_error", str(error)))
+            return
+        except Exception:
+            self.ai_event_queue.put(
+                ("stop_error", "停止 Codex 回答时遇到本地错误。")
+            )
+
+    def _apply_ai_event(self, event_name: str, payload: object) -> None:
+        """流式显示 AI 答复，并将最终摘要写入本地操作记录。"""
+
+        if event_name == "delta" and isinstance(payload, str):
+            self.ai_response_buffer += payload
+            self._set_readonly_text(
+                self.ai_response_text,
+                self.ai_response_buffer,
+            )
+            self.ai_response_text.see("end")
+            return
+        if event_name == "stop_error":
+            self.stop_ai_button.configure(
+                text="停止回答",
+                style="Accent.TButton",
+                state="normal" if self.ai_running else "disabled",
+            )
+            self._append_log(str(payload))
+            return
+
+        self.ai_running = False
+        self.send_button.configure(text="询问 Codex", state="normal")
+        self.ai_plan_button.configure(text="生成 AI 计划", state="normal")
+        self.stop_ai_button.configure(
+            text="停止回答",
+            style="Disabled.TButton",
+            state="disabled",
+        )
+        self.local_plan_button.configure(state="normal")
+        self.reasoning_mode_combo.configure(state="readonly")
+        self.refresh_button.configure(state="normal")
+        if event_name == "rectangle_extracted" and isinstance(payload, dict):
+            extraction = payload.get("extraction")
+            if not isinstance(extraction, dict):
+                self._set_readonly_text(
+                    self.response_text, "AI 参数格式无效，模型没有改变。"
+                )
+                return
+            status = extraction.get("status")
+            message = str(extraction.get("message", "")).strip()
+            if status == "ready":
+                try:
+                    request = request_from_ai_extraction(extraction)
+                except RectangleCommandError as error:
+                    self._set_readonly_text(self.response_text, str(error))
+                    self._append_log("AI 参数未通过本地白名单校验。")
+                    return
+                self._set_readonly_text(
+                    self.ai_response_text,
+                    (
+                        "Codex 已识别矩形板参数：\n"
+                        "模型 {0}，零件 {1}，长 {2:g} mm，宽 {3:g} mm。\n\n"
+                        "下面的修改计划由本地白名单代码生成，并非 AI 代码。"
+                    ).format(
+                        request.model_name,
+                        request.part_name,
+                        request.length,
+                        request.width,
+                    ),
+                )
+                self._prepare_rectangle_plan(request)
+                self.output_notebook.select(1)
+                return
+            self._set_readonly_text(
+                self.ai_response_text,
+                message or "Codex 尚未得到可用于矩形板计划的完整信息。",
+            )
+            self._set_readonly_text(
+                self.response_text,
+                (
+                    "信息还不完整，请按 AI 提示补充后重新生成。"
+                    if status == "needs_clarification"
+                    else "当前需求不属于第一版矩形板白名单，未生成计划。"
+                ),
+            )
+            self.safety_label.configure(
+                text="尚无可应用计划｜模型没有改变",
+                foreground=COLOR_WARNING,
+            )
+            self._append_log("AI 未生成可应用矩形计划；模型没有改变。")
+            return
+        if event_name == "completed" and isinstance(payload, dict):
+            answer = str(payload.get("answer", "")).strip()
+            prompt = str(payload.get("prompt", "")).strip()
+            self.ai_response_buffer = answer
+            self._set_readonly_text(self.ai_response_text, answer)
+            self._set_readonly_text(
+                self.response_text,
+                (
+                    "AI 咨询已经完成，但尚未生成可执行修改计划。\n\n"
+                    "如需修改 Abaqus，后续必须把建议转换为白名单 action，"
+                    "再次审阅后才能点击“应用修改”。"
+                ),
+            )
+            self.safety_label.configure(
+                text="AI 答复仅供咨询｜没有修改 Abaqus",
+                foreground=COLOR_SUCCESS,
+            )
+            title = "AI 咨询｜{0}".format(prompt[:80])
+            self._record_history(
+                title=title,
+                status="AI 答复",
+                details=answer,
+            )
+            self._append_log("Codex 咨询完成；答复已写入本地操作记录。")
+            return
+
+        if event_name == "interrupted":
+            visible_text = self.ai_response_buffer.strip()
+            self._set_readonly_text(
+                self.ai_response_text,
+                (
+                    (visible_text + "\n\n") if visible_text else ""
+                ) + "【已停止】用户已中断本次 Codex 回答。",
+            )
+            self._set_readonly_text(
+                self.response_text,
+                "本次 AI 回答已停止，没有生成修改计划。",
+            )
+            self.safety_label.configure(
+                text="AI 回答已停止｜没有修改 Abaqus",
+                foreground=COLOR_WARNING,
+            )
+            self._append_log("当前 Codex 回答已停止；模型没有改变。")
+            return
+
+        message = str(payload)
+        self._set_readonly_text(
+            self.ai_response_text,
+            (
+                "Codex 咨询没有完成。\n\n{0}\n\n"
+                "Abaqus 模型没有改变，也没有生成修改计划。"
+            ).format(message),
+        )
+        self.safety_label.configure(
+            text="AI 咨询失败｜没有修改 Abaqus",
+            foreground=COLOR_ERROR,
+        )
+        self._append_log("Codex 咨询未完成；模型没有改变。")
+
+    def _handle_local_plan(self) -> None:
+        """保留原有固定句式计划，不把本地规则伪装成 AI。"""
+
+        if self.refresh_running or self.action_running or self.ai_running:
             return
 
         command = self.command_text.get("1.0", "end-1c")
         decision = classify_command(command)
         self._clear_pending_plan()
         self._set_readonly_text(self.response_text, decision.response)
+        self.output_notebook.select(1)
         if decision.action == "refresh":
             self._append_log("中文输入已识别为只读刷新请求。")
             self._start_refresh()
@@ -1038,6 +1819,8 @@ class DesktopAssistantApp:
         self.action_running = True
         self.command_text.configure(state="disabled")
         self.send_button.configure(state="disabled")
+        self.ai_plan_button.configure(state="disabled")
+        self.local_plan_button.configure(state="disabled")
         self.refresh_button.configure(state="disabled")
         self.safety_label.configure(
             text="正在读取实时旧值｜尚未修改模型", foreground=COLOR_WARNING
@@ -1076,6 +1859,8 @@ class DesktopAssistantApp:
         self.command_text.edit_modified(False)
         self.refresh_button.configure(state="normal")
         self.send_button.configure(state="normal")
+        self.ai_plan_button.configure(state="normal")
+        self.local_plan_button.configure(state="normal")
         if event_name == "plan_ready" and isinstance(payload, dict):
             self.pending_plan = payload
             self.pending_plan_type = "material"
@@ -1223,7 +2008,7 @@ class DesktopAssistantApp:
                     text="离线十步向导已完成｜CAE 未修改",
                     foreground=COLOR_SUCCESS,
                 )
-                self.goal_var.set("离线十步向导已完成｜联网 / AI 尚未接入")
+                self.goal_var.set("离线十步向导已完成｜只读 AI 咨询可继续使用")
             else:
                 self.safety_label.configure(
                     text="本步骤已写入新工作副本｜原文件未覆盖",
@@ -1270,7 +2055,7 @@ class DesktopAssistantApp:
                 "最大 Mises 应力：{2:.8g} MPa\n"
                 "中文报告：{3}\n\n"
                 "CAE 模型没有修改。离线确定性向导已经完成；"
-                "联网和 AI 咨询仍未接入。"
+                "只读 AI 咨询已经接入；联网检索和 AI 自动计划仍未开放。"
             ).format(
                 payload["job"],
                 payload["maximum_displacement"],
@@ -1423,6 +2208,8 @@ class DesktopAssistantApp:
         self.action_running = True
         self.command_text.configure(state="disabled")
         self.send_button.configure(state="disabled")
+        self.ai_plan_button.configure(state="disabled")
+        self.local_plan_button.configure(state="disabled")
         self.refresh_button.configure(state="disabled")
         self.safety_label.configure(
             text=(
@@ -1518,7 +2305,7 @@ class DesktopAssistantApp:
     def _clear_command(self) -> None:
         """清空中文输入和答复，不影响已读取的模型摘要。"""
 
-        if self.action_running:
+        if self.action_running or self.ai_running:
             return
         self._clear_pending_plan()
         self.command_text.delete("1.0", "end")
@@ -1526,7 +2313,21 @@ class DesktopAssistantApp:
             self.response_text,
             "已清空输入和待应用计划。模型摘要仍为最近一次只读结果。",
         )
+        self.ai_response_buffer = ""
+        self._set_readonly_text(
+            self.ai_response_text,
+            "已清空当前 AI 对话显示。以前的答复仍可在“操作记录”中查看。",
+        )
         self._append_log("中文输入区域已清空。")
+
+    def _close_application(self) -> None:
+        """只关闭本窗口启动的 App Server，再销毁 Tk 窗口。"""
+
+        client = self.codex_client
+        self.codex_client = None
+        if client is not None:
+            client.close()
+        self.root.destroy()
 
     def _append_log(self, message: str) -> None:
         """只记录动作类型和结果，不复制用户命令或本机路径。"""

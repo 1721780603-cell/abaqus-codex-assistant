@@ -16,7 +16,14 @@ HISTORY_SCHEMA = "abaqus-codex-assistant-history/1"
 MAX_HISTORY_RECORDS = 120
 MAX_HISTORY_TEXT = 12000
 ALLOWED_STATUSES = frozenset(
-    ("计划待确认", "计划失败", "执行成功", "执行失败", "检查完成")
+    (
+        "AI 答复",
+        "计划待确认",
+        "计划失败",
+        "执行成功",
+        "执行失败",
+        "检查完成",
+    )
 )
 WINDOWS_PATH_PATTERN = re.compile(r"(?i)(?:[A-Z]:\\|\\\\)[^\r\n]*")
 POSIX_PATH_PATTERN = re.compile(r"(?m)(?<!\w)/(?:[^\s/]+/)+[^\s]*")

@@ -14,7 +14,7 @@
 
 - **基础建模**：Abaqus、Abaqus 内置 Python 与对应年份的 abqpy。这些是创建和求解支持模型的基础。
 - **Codex 智能建模**：在基础环境上增加 Abaqus MCP。MCP 不是基础 CLI 建模的必需品。
-- **科研工具**：GitHub CLI 登录、Zotero 本地 API / Connector 和 ScienceDirect 机构访问。它们都是可选项。
+- **科研工具**：Git 本体、GitHub CLI 登录、Zotero 本地 API / Connector 和 ScienceDirect 机构访问。它们都是可选项。Git 与 GitHub 登录必须分别报告：`git --version` 成功不代表 `gh auth status` 已登录。
 
 不要把“未检查”说成“未安装”，也不要把 ScienceDirect 的手动确认说成程序已验证登录。
 
