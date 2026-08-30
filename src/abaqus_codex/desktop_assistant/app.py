@@ -21,6 +21,11 @@ from abaqus_codex.desktop_assistant.controller import (
     refresh_read_only,
 )
 from abaqus_codex.desktop_assistant.mock_bridge import MockReadOnlyBridge
+from abaqus_codex.desktop_assistant.assistant_history import (
+    AssistantHistoryStore,
+    format_history,
+)
+from abaqus_codex.desktop_assistant.beginner_guide import format_beginner_guide
 from abaqus_codex.desktop_assistant.material_flow import (
     MaterialCommandError,
     MaterialEditRequest,
@@ -28,6 +33,7 @@ from abaqus_codex.desktop_assistant.material_flow import (
     format_material_plan,
 )
 from abaqus_codex.desktop_assistant.rectangle_flow import (
+    DEFAULT_RECTANGLE_COMMAND,
     RectangleCommandError,
     RectangleCreateRequest,
     build_rectangle_plan,
@@ -100,12 +106,14 @@ class DesktopAssistantApp:
         root: tk.Tk,
         bridge: object,
         action_bridge: Optional[object] = None,
+        history_store: Optional[AssistantHistoryStore] = None,
     ) -> None:
         """创建窗口；耗时的模型读取会在后台线程中执行。"""
 
         self.root = root
         self.bridge = bridge
         self.action_bridge = action_bridge or bridge
+        self.history_store = history_store or AssistantHistoryStore()
         try:
             current_dpi = float(self.root.winfo_fpixels("1i"))
         except (tk.TclError, TypeError, ValueError):
@@ -120,8 +128,11 @@ class DesktopAssistantApp:
         # 计划类型单独保存，避免材料和几何误走同一个执行入口。
         self.pending_plan_type: Optional[str] = None
         self.current_guided_stage: Optional[str] = None
+        self.current_step_number = 1
         self.latest_state: Optional[AssistantViewState] = None
         self.log_lines: list[str] = []
+        self.guide_window: Optional[tk.Toplevel] = None
+        self.history_window: Optional[tk.Toplevel] = None
 
         self.connection_var = tk.StringVar(value="正在检查")
         self.goal_var = tk.StringVar(
@@ -348,7 +359,7 @@ class DesktopAssistantApp:
         """构建当前模型摘要区域。"""
 
         panel = self._panel(parent, 0)
-        panel.grid_rowconfigure(4, weight=1)
+        panel.grid_rowconfigure(5, weight=1)
         ttk.Label(panel, text="当前模型", style="PanelTitle.TLabel").grid(
             row=0, column=0, sticky="w"
         )
@@ -391,6 +402,26 @@ class DesktopAssistantApp:
             pady=(self._px(5), self._px(10)),
         )
 
+        route_actions = ttk.Frame(panel, style="Panel.TFrame")
+        route_actions.grid(
+            row=4,
+            column=0,
+            sticky="ew",
+            pady=(0, self._px(10)),
+        )
+        ttk.Button(
+            route_actions,
+            text="查看十步指令",
+            style="Secondary.TButton",
+            command=self._show_beginner_guide,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            route_actions,
+            text="操作记录",
+            style="Secondary.TButton",
+            command=self._show_history,
+        ).grid(row=0, column=1, sticky="w", padx=(self._px(8), 0))
+
         self.summary_text = scrolledtext.ScrolledText(
             panel,
             wrap="word",
@@ -406,7 +437,7 @@ class DesktopAssistantApp:
             font=self._font(10),
             takefocus=False,
         )
-        self.summary_text.grid(row=4, column=0, sticky="nsew")
+        self.summary_text.grid(row=5, column=0, sticky="nsew")
         self._set_readonly_text(
             self.summary_text,
             (
@@ -423,8 +454,113 @@ class DesktopAssistantApp:
             command=self._start_refresh,
         )
         self.refresh_button.grid(
-            row=5, column=0, sticky="w", pady=(self._px(12), 0)
+            row=6, column=0, sticky="w", pady=(self._px(12), 0)
         )
+
+    def _show_text_window(
+        self,
+        *,
+        attribute: str,
+        title: str,
+        content: str,
+    ) -> None:
+        """复用一个非模态只读窗口展示路线或历史。"""
+
+        existing = getattr(self, attribute, None)
+        if existing is not None and existing.winfo_exists():
+            text_widget = getattr(existing, "content_text", None)
+            if text_widget is not None:
+                self._set_readonly_text(text_widget, content)
+                text_widget.see("1.0")
+            existing.deiconify()
+            existing.lift()
+            existing.focus_force()
+            return
+
+        window = tk.Toplevel(self.root)
+        setattr(self, attribute, window)
+        window.title(title)
+        window.geometry(
+            "{0}x{1}".format(self._px(760), self._px(680))
+        )
+        window.minsize(self._px(620), self._px(480))
+        window.configure(background=COLOR_BACKGROUND)
+        window.grid_rowconfigure(0, weight=1)
+        window.grid_columnconfigure(0, weight=1)
+        text_widget = scrolledtext.ScrolledText(
+            window,
+            wrap="word",
+            padx=self._px(16),
+            pady=self._px(16),
+            relief="flat",
+            borderwidth=0,
+            background=COLOR_PANEL,
+            foreground=COLOR_TEXT,
+            selectbackground="#BBD6E3",
+            font=self._font(10),
+            takefocus=True,
+        )
+        text_widget.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=self._px(14),
+            pady=(self._px(14), self._px(8)),
+        )
+        window.content_text = text_widget
+        self._set_readonly_text(text_widget, content)
+        ttk.Button(
+            window,
+            text="关闭",
+            style="Secondary.TButton",
+            command=window.destroy,
+        ).grid(
+            row=1,
+            column=0,
+            sticky="e",
+            padx=self._px(14),
+            pady=(0, self._px(14)),
+        )
+        window.bind("<Escape>", lambda _event: window.destroy())
+
+    def _show_beginner_guide(self) -> None:
+        """显示当前步骤和完整十步固定句式。"""
+
+        self._show_text_window(
+            attribute="guide_window",
+            title="矩形板拉伸十步指令",
+            content=format_beginner_guide(self.current_step_number),
+        )
+
+    def _show_history(self) -> None:
+        """显示持久化操作记录；读取失败按空历史处理。"""
+
+        self._show_text_window(
+            attribute="history_window",
+            title="Abaqus 中文建模助手操作记录",
+            content=format_history(self.history_store.read()),
+        )
+
+    def _record_history(self, *, title: str, status: str, details: str) -> None:
+        """保存界面已展示的安全摘要，失败时不影响 Abaqus 操作。"""
+
+        try:
+            self.history_store.append(
+                title=title,
+                status=status,
+                details=details,
+            )
+        except (OSError, ValueError):
+            self._append_log("操作记录暂时无法保存；模型操作结果不受影响。")
+            return
+        history_window = self.history_window
+        if history_window is not None and history_window.winfo_exists():
+            text_widget = getattr(history_window, "content_text", None)
+            if text_widget is not None:
+                self._set_readonly_text(
+                    text_widget,
+                    format_history(self.history_store.read()),
+                )
 
     def _build_command_panel(self, parent: tk.Widget) -> None:
         """构建中文输入、修改计划和安全执行日志区域。"""
@@ -467,7 +603,7 @@ class DesktopAssistantApp:
         self.command_text.grid(row=2, column=0, sticky="ew")
         self.command_text.insert(
             "1.0",
-            "创建一个长 100 mm、宽 20 mm 的二维矩形板，模型名 Model-1，零件名 Plate",
+            DEFAULT_RECTANGLE_COMMAND,
         )
         self.command_text.edit_modified(False)
 
@@ -819,16 +955,22 @@ class DesktopAssistantApp:
         """生成一个离线向导步骤计划；相互作用检查点不写模型。"""
 
         if request.stage == STAGE_INTERACTION:
+            response = (
+                "【第 6/10 步完成：相互作用检查】\n\n"
+                "当前教学模型只有一个连续矩形板零件，没有两个独立表面之间的"
+                "接触、绑定或连接关系，因此本步骤不创建 Interaction。\n\n"
+                "这不是忽略接触：只有模型包含多个可能相互接触的部件时，"
+                "才需要定义接触属性和相互作用。\n\n"
+                "下一步：第 7/10 步，边界条件与拉伸位移。"
+            )
             self._set_readonly_text(
                 self.response_text,
-                (
-                    "【第 6/10 步完成：相互作用检查】\n\n"
-                    "当前教学模型只有一个连续矩形板零件，没有两个独立表面之间的"
-                    "接触、绑定或连接关系，因此本步骤不创建 Interaction。\n\n"
-                    "这不是忽略接触：只有模型包含多个可能相互接触的部件时，"
-                    "才需要定义接触属性和相互作用。\n\n"
-                    "下一步：第 7/10 步，边界条件与拉伸位移。"
-                ),
+                response,
+            )
+            self._record_history(
+                title="第 6/10 步｜相互作用检查",
+                status="检查完成",
+                details=response,
             )
             self._append_log("相互作用检查完成；单一连续体无需创建 Interaction。")
             self._set_next_guided_command(NEXT_STAGE[request.stage])
@@ -868,6 +1010,7 @@ class DesktopAssistantApp:
         """成功后填入下一步示例，并清楚标出当前离线目标。"""
 
         self.current_guided_stage = stage
+        self.current_step_number = STAGE_NUMBERS[stage]
         self.command_text.configure(state="normal")
         self.command_text.delete("1.0", "end")
         self.command_text.insert("1.0", DEFAULT_COMMANDS[stage])
@@ -936,8 +1079,14 @@ class DesktopAssistantApp:
         if event_name == "plan_ready" and isinstance(payload, dict):
             self.pending_plan = payload
             self.pending_plan_type = "material"
+            formatted_plan = format_material_plan(payload)
             self._set_readonly_text(
-                self.response_text, format_material_plan(payload)
+                self.response_text, formatted_plan
+            )
+            self._record_history(
+                title="独立材料修改计划",
+                status="计划待确认",
+                details=formatted_plan,
             )
             self.apply_button.configure(state="normal", style="Accent.TButton")
             self.safety_label.configure(
@@ -948,8 +1097,14 @@ class DesktopAssistantApp:
         elif event_name == "rectangle_plan_ready" and isinstance(payload, dict):
             self.pending_plan = payload
             self.pending_plan_type = "rectangle"
+            formatted_plan = format_rectangle_plan(payload)
             self._set_readonly_text(
-                self.response_text, format_rectangle_plan(payload)
+                self.response_text, formatted_plan
+            )
+            self._record_history(
+                title="第 1/10 步｜几何修改计划",
+                status="计划待确认",
+                details=formatted_plan,
             )
             self.apply_button.configure(state="normal", style="Accent.TButton")
             self.safety_label.configure(
@@ -967,8 +1122,14 @@ class DesktopAssistantApp:
                 return
             self.pending_plan = plan
             self.pending_plan_type = "guided:" + stage
+            formatted_plan = format_guided_plan(plan, stage)
             self._set_readonly_text(
-                self.response_text, format_guided_plan(plan, stage)
+                self.response_text, formatted_plan
+            )
+            self._record_history(
+                title="第 {0}/10 步｜修改计划".format(STAGE_NUMBERS[stage]),
+                status="计划待确认",
+                details=formatted_plan,
             )
             self.apply_button.configure(state="normal", style="Accent.TButton")
             self.safety_label.configure(
@@ -986,21 +1147,27 @@ class DesktopAssistantApp:
             )
         elif event_name == "apply_success" and isinstance(payload, dict):
             after = payload["after"]
+            success_text = (
+                "【应用成功】\n"
+                "模型：{0}\n材料：{1}\n"
+                "新弹性模量：{2:g} MPa\n新泊松比：{3:g}\n\n"
+                "Abaqus 当前会话已切换到受保护工作副本：{4}\n"
+                "原 CAE 文件没有被覆盖。请回到 Abaqus 检查材料并保存后续工作。"
+            ).format(
+                payload["model"],
+                payload["material"],
+                after["youngs_modulus"],
+                after["poisson_ratio"],
+                payload["working_copy_name"],
+            )
             self._set_readonly_text(
                 self.response_text,
-                (
-                    "【应用成功】\n"
-                    "模型：{0}\n材料：{1}\n"
-                    "新弹性模量：{2:g} MPa\n新泊松比：{3:g}\n\n"
-                    "Abaqus 当前会话已切换到受保护工作副本：{4}\n"
-                    "原 CAE 文件没有被覆盖。请回到 Abaqus 检查材料并保存后续工作。"
-                ).format(
-                    payload["model"],
-                    payload["material"],
-                    after["youngs_modulus"],
-                    after["poisson_ratio"],
-                    payload["working_copy_name"],
-                ),
+                success_text,
+            )
+            self._record_history(
+                title="独立材料修改结果",
+                status="执行成功",
+                details=success_text,
             )
             self.safety_label.configure(
                 text="修改已写入受保护工作副本｜原文件未覆盖",
@@ -1008,22 +1175,28 @@ class DesktopAssistantApp:
             )
             self._append_log("材料修改成功，原 CAE 文件未覆盖。")
         elif event_name == "rectangle_apply_success" and isinstance(payload, dict):
+            success_text = (
+                "【第 1/10 步完成：几何已创建】\n"
+                "模型：{0}\n零件：{1}\n"
+                "尺寸：{2:g} mm × {3:g} mm\n\n"
+                "Abaqus 当前会话已切换到受保护工作副本：{4}\n"
+                "原 CAE 文件没有被覆盖。请回到 Abaqus 检查矩形板。\n\n"
+                "下一步：第 2/10 步，定义材料。"
+            ).format(
+                payload["model"],
+                payload["part"],
+                payload["length"],
+                payload["width"],
+                payload["working_copy_name"],
+            )
             self._set_readonly_text(
                 self.response_text,
-                (
-                    "【第 1/10 步完成：几何已创建】\n"
-                    "模型：{0}\n零件：{1}\n"
-                    "尺寸：{2:g} mm × {3:g} mm\n\n"
-                    "Abaqus 当前会话已切换到受保护工作副本：{4}\n"
-                    "原 CAE 文件没有被覆盖。请回到 Abaqus 检查矩形板。\n\n"
-                    "下一步：第 2/10 步，定义材料。"
-                ).format(
-                    payload["model"],
-                    payload["part"],
-                    payload["length"],
-                    payload["width"],
-                    payload["working_copy_name"],
-                ),
+                success_text,
+            )
+            self._record_history(
+                title="第 1/10 步｜几何执行结果",
+                status="执行成功",
+                details=success_text,
             )
             self.safety_label.configure(
                 text="几何已写入受保护工作副本｜下一步定义材料",
@@ -1034,8 +1207,16 @@ class DesktopAssistantApp:
             self.root.after(300, self._start_refresh)
         elif event_name == "guided_apply_success" and isinstance(payload, dict):
             stage = str(payload.get("stage", ""))
+            success_text = self._format_guided_success(payload)
             self._set_readonly_text(
-                self.response_text, self._format_guided_success(payload)
+                self.response_text, success_text
+            )
+            self._record_history(
+                title="第 {0}/10 步｜执行结果".format(
+                    STAGE_NUMBERS.get(stage, 0)
+                ),
+                status="执行成功",
+                details=success_text,
             )
             if stage == STAGE_RESULTS:
                 self.safety_label.configure(
@@ -1059,11 +1240,17 @@ class DesktopAssistantApp:
             )
         else:
             message = str(payload)
+            failure_text = (
+                "操作没有明确成功。\n\n{0}\n\n模型原文件不会被覆盖。"
+            ).format(message)
             self._set_readonly_text(
                 self.response_text,
-                "操作没有明确成功。\n\n{0}\n\n模型原文件不会被覆盖。".format(
-                    message
-                ),
+                failure_text,
+            )
+            self._record_history(
+                title="计划生成失败" if event_name == "plan_error" else "执行未成功",
+                status="计划失败" if event_name == "plan_error" else "执行失败",
+                details=failure_text,
             )
             self.safety_label.configure(
                 text="没有可应用计划｜请检查提示后重新生成",
