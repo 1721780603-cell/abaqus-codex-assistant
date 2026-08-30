@@ -70,7 +70,7 @@ class DistributionInstallerTests(unittest.TestCase):
         """先装核心组件，随后才检测 Abaqus 并决定是否安装安全插件。"""
 
         text = INSTALLER.read_text(encoding="utf-8")
-        self.assertIn(r".codex\skills\abaqus-modeling-guide", text)
+        self.assertIn('Join-Path $CodexHome "skills\\abaqus-modeling-guide"', text)
         self.assertIn("install-preflight", text)
         self.assertIn("$installSafePlugin", text)
         self.assertIn("if ($installSafePlugin)", text)
@@ -84,6 +84,30 @@ class DistributionInstallerTests(unittest.TestCase):
             text.index("install-preflight --json"),
         )
         self.assertNotIn("Abaqus was not detected. Install Abaqus", text)
+
+    def test_installer_respects_custom_codex_home(self):
+        """Skill 应进入 CODEX_HOME，清单也必须记录真实目标。"""
+
+        installer = INSTALLER.read_text(encoding="utf-8")
+        uninstaller = UNINSTALLER.read_text(encoding="utf-8")
+        self.assertIn("[string]$CodexHome", installer)
+        self.assertIn("$env:CODEX_HOME", installer)
+        self.assertIn('codex_home = $CodexHome', installer)
+        self.assertIn('Join-Path $CodexHome "skills\\abaqus-modeling-guide"', installer)
+        self.assertIn('Properties["codex_home"]', uninstaller)
+        self.assertIn('Join-Path $codexHome "skills\\abaqus-modeling-guide"', uninstaller)
+
+    def test_optional_setup_failures_keep_managed_core_install(self):
+        """联网组件失败不能阻止生成核心安装清单和后续修复入口。"""
+
+        text = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn('$pluginSetupStatus = "failed"', text)
+        self.assertIn('$abqpySetupStatus = "failed"', text)
+        self.assertIn('$mcpSetupStatus = "failed"', text)
+        self.assertIn('plugin_setup = $pluginSetupStatus', text)
+        self.assertIn('abqpy_setup = $abqpySetupStatus', text)
+        self.assertIn('mcp_setup = $mcpSetupStatus', text)
+        self.assertLess(text.index('mcp_setup = $mcpSetupStatus'), text.index('Installation completed.'))
 
     def test_uninstaller_skips_plugin_not_owned_by_install(self):
         """核心模式未安装插件时，卸载器不得移动用户原有插件。"""

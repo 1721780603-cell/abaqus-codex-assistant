@@ -29,7 +29,11 @@ if ($recordedRoot -ne $actualRoot) {
     throw "Installation root does not match its manifest. No files were removed."
 }
 $userProfileRoot = [System.IO.Path]::GetFullPath([string]$manifest.user_profile_root)
-$expectedSkillTarget = Join-Path $userProfileRoot ".codex\skills\abaqus-modeling-guide"
+$codexHome = Join-Path $userProfileRoot ".codex"
+if ($null -ne $manifest.PSObject.Properties["codex_home"] -and -not [string]::IsNullOrWhiteSpace([string]$manifest.codex_home)) {
+    $codexHome = [System.IO.Path]::GetFullPath([string]$manifest.codex_home)
+}
+$expectedSkillTarget = Join-Path $codexHome "skills\abaqus-modeling-guide"
 $expectedPluginTarget = Join-Path $userProfileRoot "abaqus_plugins\safe_material_action"
 if ([string]$manifest.skill_target -ne $expectedSkillTarget -or [string]$manifest.plugin_target -ne $expectedPluginTarget) {
     throw "Managed component paths do not match the manifest owner. No files were removed."

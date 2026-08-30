@@ -20,7 +20,13 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 
 ### 1. 找到项目并运行首次向导
 
-先定位包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/` 的项目根目录。无法找到时，只问用户项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。
+先只读定位包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/` 的项目根目录，按以下顺序检查：
+
+1. 统一安装器的默认目录 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`；
+2. 当前目录及其父目录；
+3. 用户明确提供的目录。
+
+默认目录存在时优先使用其中的私有 `.venv`，不要重新创建环境。不要无边界扫描用户文件，也不要根据维护者电脑猜测路径。以上位置均无法找到时，只问用户是否已经安装完整应用以及项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。只安装本 Skill 不代表完整应用已经存在。
 
 在项目根目录运行统一只读体检；不要用零散命令替代首次体检：
 

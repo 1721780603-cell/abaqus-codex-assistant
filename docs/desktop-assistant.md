@@ -29,7 +29,7 @@
 - 独立材料修改命令只支持已有简单弹性材料，不修改温度或场变量相关弹性表；
 - 不创建接触；当前第 6 步只是对单一连续板执行“无需相互作用”的教学检查；
 - 不接受任意 Abaqus Python、脚本路径或完整本机路径；
-- 不支持 Abaqus 2022 或 2026，本阶段只适配 Abaqus 2021；
+- 核心助手和环境体检可以安装或识别 Abaqus 2022–2025，但当前真实模型修改闭环只在 Abaqus 2021 完成验证；Abaqus 2026 自动流程禁用；
 - 不判断模型单位是否真的为 mm-N-s-MPa，必须由用户确认。
 
 ## 安装
@@ -41,7 +41,9 @@
 .\.venv\Scripts\python.exe -m abaqus_codex assistant-setup --yes
 ```
 
-安装器只接受检测到的 Abaqus 2021。目标为 `%USERPROFILE%\abaqus_plugins\safe_material_action`；已有不同版本会整体改名备份，不递归删除用户文件。
+上面的 `assistant-setup` 只安装会修改模型的安全动作插件，因此只接受检测到的 Abaqus 2021。目标为 `%USERPROFILE%\abaqus_plugins\safe_material_action`；已有不同版本会整体改名备份，不递归删除用户文件。
+
+统一安装器的边界不同：无论未安装 Abaqus，还是检测到 2022–2025 候选版本，都可以先安装核心桌面助手和 Skill；只有 Abaqus 2021 会自动安装当前已验证的安全动作插件。核心安装成功不等于其他年份已经可以修改模型。
 
 随后关闭并重新打开 Abaqus/CAE 2021。插件通过 GUI 主事件循环处理请求，不使用访问 `mdb` 的后台 Python 线程。
 
@@ -55,14 +57,14 @@
 .\.venv\Scripts\python.exe -m abaqus_codex assistant
 ```
 
-4. 第一次使用先点击左侧“环境体检”。它会只读检查项目 Python、Abaqus、Abaqus Python、abqpy、Codex、Abaqus MCP、Git、GitHub、Zotero 和 ScienceDirect，不会安装软件、登录账号或修改模型。
+4. 第一次使用先点击左侧“环境体检”。它会按“应用 → Abaqus → 同年份 abqpy → Codex/MCP → 第一个模型”的五层主路线只读检查状态；Git、GitHub、Zotero 和 ScienceDirect 作为科研可选项另行显示。体检不会安装软件、登录账号或修改模型。
 5. 使用窗口自动填入的命令，从几何、材料、截面、装配、分析步、相互作用检查、边界条件、网格、Job 一直做到结果报告。
 6. 每一步先点击“生成计划”，核对对象、旧值、新值、风险和 mm-N-s-MPa 约定。
 7. 除相互作用教学检查外，点击“应用修改”并在确认框选择“是”后才会执行。
 8. Job 提交后等待 Abaqus 完成，再生成第 10 步计划；未完成的 Job 会被明确拒绝。
 9. 回到 Abaqus 检查当前工作副本，并打开同目录的新建 `*_report_zh_001.md` 报告。
 
-环境体检把结果分成“必需环境”“Codex 联动”“代码工具”和“科研可选”四层。黄色或灰色的 Zotero、ScienceDirect 等可选项不会阻止基础建模；选择任一检查项即可在下方看到检查结果和下一步建议。安装、修复和登录仍需用户另行确认，体检按钮本身始终是只读的。
+环境体检的五层主路线是：① 核心应用可运行；② 已找到本次目标 Abaqus 及其内置 Python；③ abqpy 与 Abaqus 年份严格一致；④ 用户选择智能模式时再验证 Codex/MCP；⑤ 进入受支持的第一个模型。界面会自动定位首个未完成层级。Git、GitHub、Zotero 和 ScienceDirect 属于科研可选项，不会阻止基础建模；Codex/MCP 也不是基础 CLI 路线的必需项。安装、修复和登录仍需用户另行确认，体检按钮本身始终是只读的。
 
 ## 初学者如何知道下一步
 

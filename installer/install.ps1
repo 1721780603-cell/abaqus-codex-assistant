@@ -7,7 +7,8 @@ param(
     [switch]$NoDesktopShortcut,
     [switch]$Yes,
     [string]$InstallRoot,
-    [string]$UserProfileRoot
+    [string]$UserProfileRoot,
+    [string]$CodexHome
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,6 +98,15 @@ if ([string]::IsNullOrWhiteSpace($UserProfileRoot)) {
     Stop-Setup "USERPROFILE is not available."
 }
 $env:USERPROFILE = $UserProfileRoot
+if ([string]::IsNullOrWhiteSpace($CodexHome)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+        $CodexHome = $env:CODEX_HOME
+    }
+    else {
+        $CodexHome = Join-Path $UserProfileRoot ".codex"
+    }
+}
+$CodexHome = [System.IO.Path]::GetFullPath($CodexHome)
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
         Stop-Setup "LOCALAPPDATA is not available."
@@ -119,7 +129,7 @@ if ((Test-Path -LiteralPath $InstallRoot) -and $Mode -eq "Install") {
 Write-Host ""
 Write-Host "Install plan"
 Write-Host "  Application: $InstallRoot"
-Write-Host "  Codex skill: $(Join-Path $UserProfileRoot '.codex\skills\abaqus-modeling-guide')"
+Write-Host "  Codex skill: $(Join-Path $CodexHome 'skills\abaqus-modeling-guide')"
 Write-Host "  Abaqus detection: after core installation"
 Write-Host "  abqpy download: $([bool]$InstallAbqpy)"
 Write-Host "  MCP download and registration: $([bool]$InstallMcp)"
@@ -200,7 +210,7 @@ $installedPython = Join-Path $InstallRoot ".venv\Scripts\python.exe"
 
 # Keep the Skill replaceable so it can be upgraded independently.
 $skillSource = Join-Path $InstallRoot "skills\abaqus-modeling-guide"
-$skillTarget = Join-Path $UserProfileRoot ".codex\skills\abaqus-modeling-guide"
+$skillTarget = Join-Path $CodexHome "skills\abaqus-modeling-guide"
 New-Item -ItemType Directory -Path (Split-Path -Parent $skillTarget) -Force | Out-Null
 $skillBackup = Backup-Directory $skillTarget
 Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Recurse
@@ -229,16 +239,40 @@ if ([string]::IsNullOrWhiteSpace($detectedAbaqusVersion)) {
 
 # Install the model-changing plugin only for its verified Abaqus version.
 $pluginInstalled = $false
+$pluginSetupStatus = "not-supported"
 if ($installSafePlugin) {
-    Invoke-Checked $installedPython @("-m", "abaqus_codex", "assistant-setup", "--yes")
-    $pluginInstalled = $true
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "assistant-setup", "--yes")
+        $pluginInstalled = $true
+        $pluginSetupStatus = "completed"
+    }
+    catch {
+        $pluginSetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but the Abaqus safe plugin failed: $($_.Exception.Message)"
+    }
 }
 
+$abqpySetupStatus = "not-requested"
 if ($InstallAbqpy) {
-    Invoke-Checked $installedPython @("-m", "abaqus_codex", "abqpy-setup", "--yes")
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "abqpy-setup", "--yes")
+        $abqpySetupStatus = "completed"
+    }
+    catch {
+        $abqpySetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but abqpy setup failed: $($_.Exception.Message)"
+    }
 }
+$mcpSetupStatus = "not-requested"
 if ($InstallMcp) {
-    Invoke-Checked $installedPython @("-m", "abaqus_codex", "mcp-setup", "--yes")
+    try {
+        Invoke-Checked $installedPython @("-m", "abaqus_codex", "mcp-setup", "--yes")
+        $mcpSetupStatus = "completed"
+    }
+    catch {
+        $mcpSetupStatus = "failed"
+        Write-Warning "The core app and Skill were installed, but MCP setup failed: $($_.Exception.Message)"
+    }
 }
 
 $desktop = [Environment]::GetFolderPath("Desktop")
@@ -259,9 +293,13 @@ $manifest = @{
     installed_at = (Get-Date).ToString("o")
     install_root = $InstallRoot
     user_profile_root = $UserProfileRoot
+    codex_home = $CodexHome
     skill_target = $skillTarget
     plugin_target = (Join-Path $UserProfileRoot "abaqus_plugins\safe_material_action")
     plugin_installed = $pluginInstalled
+    plugin_setup = $pluginSetupStatus
+    abqpy_setup = $abqpySetupStatus
+    mcp_setup = $mcpSetupStatus
     skill_backup = $skillBackup
     application_backup = $applicationBackup
     detected_abaqus_version = $detectedAbaqusVersion
@@ -283,6 +321,10 @@ else {
     else {
         Write-Host "The core app and Skill are installed. Abaqus was not detected; run Environment Check after Abaqus is installed or configured."
     }
+}
+if ($pluginSetupStatus -eq "failed" -or $abqpySetupStatus -eq "failed" -or $mcpSetupStatus -eq "failed") {
+    Write-Host "One or more optional components failed. The managed core installation was kept."
+    Write-Host "Correct the reported issue, then run this release again with -Mode Repair and the required optional switches."
 }
 Write-Host "Run the desktop shortcut, then open Environment Check."
 Invoke-Checked $installedPython @("-m", "abaqus_codex", "onboard")
