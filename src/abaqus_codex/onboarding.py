@@ -25,6 +25,77 @@ ZOTERO_BASE_URL = "http://127.0.0.1:23119"
 SCIENCEDIRECT_URL = "https://www.sciencedirect.com/"
 
 
+def find_git() -> Optional[Path]:
+    """从 PATH 和 Windows 常见目录寻找 Git 本体。"""
+
+    path_command = shutil.which("git")
+    if path_command:
+        return Path(path_command)
+
+    if os.name == "nt":
+        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+        candidate = Path(program_files) / "Git" / "cmd" / "git.exe"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def inspect_git(timeout_seconds: int = 10) -> Dict[str, object]:
+    """只读检查 Git 是否可以启动，并返回公开的版本文字。"""
+
+    command = find_git()
+    if command is None:
+        return {
+            "installed": False,
+            "usable": False,
+            "command": None,
+            "version": None,
+            "message": "没有找到 Git。",
+        }
+
+    try:
+        completed = subprocess.run(
+            [str(command), "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout_seconds,
+            check=False,
+            text=True,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "installed": True,
+            "usable": False,
+            "command": str(command),
+            "version": None,
+            "message": "Git 版本检查超时。",
+        }
+    except OSError:
+        return {
+            "installed": True,
+            "usable": False,
+            "command": str(command),
+            "version": None,
+            "message": "Git 已找到，但无法启动。",
+        }
+
+    output = (completed.stdout or "").strip()
+    prefix = "git version "
+    version = output[len(prefix) :].strip() if output.startswith(prefix) else None
+    usable = completed.returncode == 0 and bool(version)
+    return {
+        "installed": True,
+        "usable": usable,
+        "command": str(command),
+        "version": version,
+        "message": (
+            "Git {0} 可以使用。".format(version)
+            if usable
+            else "Git 已安装，但版本检查没有成功。"
+        ),
+    }
+
+
 def find_github_cli() -> Optional[Path]:
     """从 PATH 和 Windows 常见安装目录寻找 GitHub CLI。"""
 
@@ -230,6 +301,7 @@ def inspect_onboarding() -> Dict[str, object]:
     """汇总一次首次启动体检，供 CLI 和 Codex Skill 使用。"""
 
     environment = inspect_environment()
+    git = inspect_git()
     github = inspect_github()
     zotero = inspect_zotero()
     science_direct = inspect_sciencedirect()
@@ -245,6 +317,7 @@ def inspect_onboarding() -> Dict[str, object]:
         "project_python": project_python,
         "environment": environment,
         "version_plan": build_version_plan(environment),
+        "git": git,
         "github": github,
         "zotero": zotero,
         "science_direct": science_direct,
@@ -253,7 +326,7 @@ def inspect_onboarding() -> Dict[str, object]:
             "codex_smart_modeling": bool(environment["ai_usable"]),
             # ScienceDirect 登录只能由用户在浏览器中确认，因此不伪造全自动就绪。
             "research_local_tools": bool(
-                github["logged_in"] and zotero["read_ready"]
+                git["usable"] and github["logged_in"] and zotero["read_ready"]
             ),
             "science_direct_requires_user": True,
         },
@@ -271,6 +344,10 @@ def print_onboarding_report(result: Dict[str, object]) -> None:
 
     environment = result["environment"]
     project_python = result["project_python"]
+    git = result.get(
+        "git",
+        {"message": "旧版体检结果没有 Git 状态，请重新运行体检。"},
+    )
     github = result["github"]
     zotero = result["zotero"]
     science_direct = result["science_direct"]
@@ -316,6 +393,7 @@ def print_onboarding_report(result: Dict[str, object]) -> None:
     print("   Abaqus MCP：{0}".format(environment["mcp"]["message"]))
     print("   结果：{0}".format(_state(readiness["codex_smart_modeling"])))
     print("3. GitHub 与 Zotero")
+    print("   Git：{0}".format(git["message"]))
     print("   GitHub：{0}".format(github["message"]))
     print("   Zotero：{0}".format(zotero["message"]))
     print("4. ScienceDirect 机构访问")

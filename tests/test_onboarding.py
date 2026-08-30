@@ -18,6 +18,7 @@ from abaqus_codex.onboarding import (
     ZOTERO_BASE_URL,
     _probe_zotero_endpoint,
     build_version_plan,
+    inspect_git,
     inspect_github,
     inspect_onboarding,
     inspect_sciencedirect,
@@ -44,6 +45,13 @@ def sample_onboarding_result():
             "abaqus": {"message": "已检测到 Abaqus。"},
             "abqpy": {"message": "abqpy 版本匹配。"},
             "mcp": {"message": "MCP 已配置，但桥接尚未响应。"},
+        },
+        "git": {
+            "installed": True,
+            "usable": True,
+            "command": "git",
+            "version": "2.51.0.windows.1",
+            "message": "Git 2.51.0.windows.1 可以使用。",
         },
         "github": {
             "installed": True,
@@ -191,6 +199,38 @@ class GitHubInspectionTests(unittest.TestCase):
         self.assertIn("无法启动", result["message"])
 
 
+class GitInspectionTests(unittest.TestCase):
+    """确认 Git 本体与 GitHub CLI 分开检查。"""
+
+    @patch("abaqus_codex.onboarding.subprocess.run")
+    @patch("abaqus_codex.onboarding.find_git", return_value=None)
+    def test_missing_git_does_not_run_command(self, find_mock, run_mock):
+        """找不到 Git 时不得猜测安装状态或尝试其他命令。"""
+
+        result = inspect_git()
+
+        self.assertFalse(result["installed"])
+        self.assertFalse(result["usable"])
+        find_mock.assert_called_once_with()
+        run_mock.assert_not_called()
+
+    @patch("abaqus_codex.onboarding.subprocess.run")
+    @patch("abaqus_codex.onboarding.find_git", return_value=Path("git"))
+    def test_git_version_uses_fixed_read_only_command(self, _find_mock, run_mock):
+        """Git 检查只允许执行固定的 --version 参数。"""
+
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="git version 2.51.0.windows.1\n"
+        )
+
+        result = inspect_git(timeout_seconds=7)
+
+        self.assertTrue(result["usable"])
+        self.assertEqual(result["version"], "2.51.0.windows.1")
+        self.assertEqual(run_mock.call_args.args[0][1:], ["--version"])
+        self.assertEqual(run_mock.call_args.kwargs["timeout"], 7)
+
+
 class ZoteroInspectionTests(unittest.TestCase):
     """确认 Zotero 检测仅访问固定的本机端点。"""
 
@@ -297,9 +337,10 @@ class OnboardingAggregateTests(unittest.TestCase):
     @patch("abaqus_codex.onboarding.inspect_sciencedirect")
     @patch("abaqus_codex.onboarding.inspect_zotero")
     @patch("abaqus_codex.onboarding.inspect_github")
+    @patch("abaqus_codex.onboarding.inspect_git")
     @patch("abaqus_codex.onboarding.inspect_environment")
     def test_readiness_reuses_existing_environment_results(
-        self, environment_mock, github_mock, zotero_mock, science_mock
+        self, environment_mock, git_mock, github_mock, zotero_mock, science_mock
     ):
         """基础、MCP 与科研本地工具应分别计算，不混淆就绪层级。"""
 
@@ -307,6 +348,7 @@ class OnboardingAggregateTests(unittest.TestCase):
             "core_usable": True,
             "ai_usable": False,
         }
+        git_mock.return_value = {"usable": True}
         github_mock.return_value = {"logged_in": True}
         zotero_mock.return_value = {"read_ready": True}
         science_mock.return_value = {
@@ -426,6 +468,7 @@ class OnboardingOutputTests(unittest.TestCase):
                 self.assertIn(option, report)
         self.assertIn("本命令不会自动安装或登录", report)
         self.assertIn("MCP 已配置，但桥接尚未响应", report)
+        self.assertIn("Git 2.51.0.windows.1 可以使用", report)
 
 
 if __name__ == "__main__":

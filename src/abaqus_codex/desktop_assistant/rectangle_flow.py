@@ -85,6 +85,21 @@ def parse_rectangle_command(value: object) -> Optional[RectangleCreateRequest]:
     )
 
 
+def request_from_ai_extraction(
+    payload: Mapping[str, object],
+) -> RectangleCreateRequest:
+    """把 AI 提取结果重新做本地校验，AI 输出绝不直接进入执行层。"""
+
+    if payload.get("status") != "ready":
+        raise RectangleCommandError("AI 尚未得到完整的矩形板参数。")
+    return RectangleCreateRequest(
+        model_name=_safe_name(str(payload.get("model_name", "")), "模型名"),
+        part_name=_safe_name(str(payload.get("part_name", "")), "零件名"),
+        length=_dimension(str(payload.get("length_mm", "")), "长度"),
+        width=_dimension(str(payload.get("width_mm", "")), "宽度"),
+    )
+
+
 def build_rectangle_plan(
     request: RectangleCreateRequest,
     *,
@@ -194,4 +209,5 @@ __all__ = [
     "build_rectangle_plan",
     "format_rectangle_plan",
     "parse_rectangle_command",
+    "request_from_ai_extraction",
 ]

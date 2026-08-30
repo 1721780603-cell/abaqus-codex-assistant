@@ -22,13 +22,13 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 
 先定位包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/` 的项目根目录。无法找到时，只问用户项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。
 
-在项目根目录运行只读体检：
+在项目根目录运行统一只读体检；不要用零散命令替代首次体检：
 
 ```powershell
 .\.venv\Scripts\python.exe -m abaqus_codex onboard --json
 ```
 
-命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言解释 Abaqus、Abaqus 内置 Python / abqpy、MCP、GitHub 和 Zotero 的状态；ScienceDirect 机构访问只能标记为“需用户确认”。涉及 Abaqus 年份、Python 代际或 MCP 兼容性时，先读取 [references/version-compatibility.md](references/version-compatibility.md)，不能把“检测到”说成“已经验证支持”。然后只问一个问题：
+命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言分别解释项目 Python、Abaqus 内置 Python、abqpy、Abaqus MCP、Git、GitHub CLI 登录和 Zotero 状态；不能把 Git 已安装说成 GitHub 已登录，也不能把 MCP 已注册说成当前 Abaqus 会话已连接。ScienceDirect 机构访问只能标记为“需用户确认”。涉及 Abaqus 年份、Python 代际或 MCP 兼容性时，先读取 [references/version-compatibility.md](references/version-compatibility.md)，不能把“检测到”说成“已经验证支持”。然后只问一个问题：
 
 1. 基础建模：只补齐 Abaqus、内置 Python 和 abqpy；
 2. Codex 智能建模：在基础环境上连接 Abaqus MCP；

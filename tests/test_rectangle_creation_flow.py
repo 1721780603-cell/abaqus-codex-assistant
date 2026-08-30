@@ -13,6 +13,7 @@ from abaqus_codex.desktop_assistant.rectangle_flow import (
     build_rectangle_plan,
     format_rectangle_plan,
     parse_rectangle_command,
+    request_from_ai_extraction,
 )
 
 
@@ -40,6 +41,31 @@ class RectangleCreationFlowTests(unittest.TestCase):
         with self.assertRaises(RectangleCommandError):
             parse_rectangle_command(
                 "创建一个长 100 mm 的二维矩形板，模型名 Model-1，零件名 Plate"
+            )
+
+    def test_ai_extraction_is_validated_again_locally(self):
+        """即使 JSON 来自 Codex，也必须经过名称和尺寸白名单校验。"""
+
+        request = request_from_ai_extraction(
+            {
+                "status": "ready",
+                "model_name": "Model-1",
+                "part_name": "Plate",
+                "length_mm": 125.0,
+                "width_mm": 30.0,
+            }
+        )
+        self.assertEqual(request.length, 125.0)
+        self.assertEqual(request.width, 30.0)
+        with self.assertRaises(RectangleCommandError):
+            request_from_ai_extraction(
+                {
+                    "status": "ready",
+                    "model_name": "../Model-1",
+                    "part_name": "Plate",
+                    "length_mm": 125.0,
+                    "width_mm": 30.0,
+                }
             )
 
     def test_plan_is_signed_and_marks_geometry_only(self):

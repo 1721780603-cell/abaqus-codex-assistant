@@ -182,7 +182,7 @@ class WindowsDpiAwarenessTests(unittest.TestCase):
             / "desktop_assistant"
             / "app.py"
         ).read_text(encoding="utf-8")
-        self.assertEqual(source.count("font=self._font(STATUS_FONT_SIZE)"), 2)
+        self.assertEqual(source.count("font=self._font(STATUS_FONT_SIZE)"), 3)
 
 
 class FileIpcReadOnlyBridgeTests(unittest.TestCase):
@@ -524,8 +524,17 @@ class DesktopSourceSafetyTests(unittest.TestCase):
             / "app.py"
         ).read_text(encoding="utf-8")
         self.assertIn("尚无可应用计划｜不会自动修改模型", source)
-        self.assertIn("未联网、未调用 AI、输入未上传", source)
+        self.assertIn("首版关闭工具和联网，只提供中文咨询", source)
+        self.assertIn("CodexReadOnlyClient", source)
+        self.assertIn("AI 咨询已经完成，但尚未生成可执行修改计划", source)
+        self.assertIn("Codex 已连接", source)
+        self.assertIn("codex_live_connected", source)
+        self.assertIn("停止回答", source)
+        self.assertIn("client.interrupt", source)
+        self.assertIn("AI 推理档位：", source)
+        self.assertIn("REASONING_MODE_EFFORT", source)
         self.assertIn("self.apply_button", source)
+        self.assertIn("self.apply_button.grid(\n            row=2", source)
         self.assertIn("messagebox.askyesno", source)
         self.assertIn("apply_material_plan", source)
         self.assertNotIn("execute_script", source)
