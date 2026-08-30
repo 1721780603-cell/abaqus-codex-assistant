@@ -4,7 +4,7 @@ title: "Abaqus Codex Assistant"
 type: software
 authors:
   - family-names: "1721780603-cell"
-version: "0.2.0-alpha"
+version: "0.2.1-alpha"
 date-released: 2026-08-31
 license: MIT
 repository-code: "https://github.com/1721780603-cell/abaqus-codex-assistant"

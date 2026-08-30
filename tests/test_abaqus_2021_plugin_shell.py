@@ -33,7 +33,7 @@ class Abaqus2021PluginShellTests(unittest.TestCase):
         source = read_plugin_source("ai_modeling_assistant_plugin.py")
         self.assertIn("registerGuiMenuButton", source)
         self.assertIn("AI 中文建模助手", source)
-        self.assertIn('version="0.2.0"', source)
+        self.assertIn('version="0.2.1"', source)
         self.assertNotIn("kernelInitString", source)
         self.assertNotIn("AFXGuiCommand", source)
 

@@ -41,6 +41,7 @@ def build_environment_items(
     git = _mapping(result.get("git"))
     github = _mapping(result.get("github"))
     zotero = _mapping(result.get("zotero"))
+    version_plan = _mapping(result.get("version_plan"))
 
     project_python_ready = bool(project_python.get("usable"))
     abaqus_ready = bool(abaqus.get("usable"))
@@ -54,7 +55,54 @@ def build_environment_items(
     abaqus_python = str(abaqus.get("python_version") or "未知")
     project_python_version = str(project_python.get("version") or "未知")
     abqpy_version = str(abqpy.get("version") or "未安装")
+    abqpy_installed = bool(abqpy.get("installed"))
+    abqpy_requirement = str(
+        version_plan.get("recommended_abqpy_requirement")
+        or abqpy.get("recommended_requirement")
+        or ""
+    ).strip()
+    abqpy_action = str(version_plan.get("abqpy_action") or "")
+    verification_level = str(version_plan.get("verification_level") or "")
     git_version = str(git.get("version") or "未知")
+
+    if abqpy_ready:
+        abqpy_status = "已就绪"
+        abqpy_tone = "success"
+        abqpy_next_step = "无需处理；Abaqus 与 abqpy 的年份已经匹配。"
+    elif abqpy_action == "unsupported":
+        abqpy_status = "版本不支持"
+        abqpy_tone = "error"
+        abqpy_next_step = (
+            "当前版本已知不兼容，禁止自动安装 abqpy、MCP 或提交求解；"
+            "等待项目完成适配和真机验证。"
+        )
+    elif abqpy_requirement and abaqus_ready:
+        abqpy_status = (
+            "版本不匹配" if abqpy_installed else "需安装 {0}".format(abqpy_requirement)
+        )
+        abqpy_tone = "warning"
+        abqpy_next_step = (
+            "先确认上面的 Abaqus {0} 正是本次要使用的版本。"
+            "确认后复制给 Codex：我确认当前使用 Abaqus {0}，"
+            "请安装严格匹配的 {1}。安装会联网，请先向我确认。"
+        ).format(abaqus_version, abqpy_requirement)
+        if verification_level == "detected_unverified":
+            abqpy_next_step += (
+                "该 Abaqus 年份尚未完成维护者真机验证；安装后先运行教学小模型，"
+                "通过建模、求解和结果读取测试后再用于正式模型。"
+            )
+    elif not abaqus_ready:
+        abqpy_status = "等待 Abaqus"
+        abqpy_tone = "warning"
+        abqpy_next_step = "先让 Abaqus 及其内置 Python 通过检查，再决定 abqpy 年份。"
+    else:
+        abqpy_status = "需人工确认"
+        abqpy_tone = "warning"
+        abqpy_next_step = (
+            "当前无法生成安全的同年份规格；请先确认 Abaqus 版本和启动命令。"
+        )
+
+    abqpy_requirement_text = abqpy_requirement or "尚未生成"
 
     codex_ready = bool(codex_status and codex_status.authenticated)
     codex_label = codex_status.label if codex_status else "Codex 尚未检查"
@@ -100,16 +148,15 @@ def build_environment_items(
         EnvironmentCheckItem(
             "必需环境",
             "abqpy",
-            "已就绪" if abqpy_ready else "待配置",
-            "success" if abqpy_ready else "warning",
-            "当前版本：{0}。{1}".format(
-                abqpy_version, str(abqpy.get("message") or "")
+            abqpy_status,
+            abqpy_tone,
+            "Abaqus 年份：{0}；当前 abqpy：{1}；严格匹配要求：{2}。{3}".format(
+                abaqus_version,
+                abqpy_version,
+                abqpy_requirement_text,
+                str(abqpy.get("message") or ""),
             ),
-            (
-                "无需处理。"
-                if abqpy_ready
-                else "确认 Abaqus 年份后，可询问是否安装严格匹配的 abqpy。"
-            ),
+            abqpy_next_step,
         ),
         EnvironmentCheckItem(
             "Codex 联动",

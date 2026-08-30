@@ -81,13 +81,13 @@
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -WhatIf
 ```
 
-确认电脑检测到 Abaqus 2021 后，再运行统一安装。它会把桌面助手安装到当前用户的 `%LOCALAPPDATA%`，同时安装 Codex Skill 和 Abaqus 安全插件，并创建桌面快捷方式：
+可以直接运行统一安装，不要求先检测到 Abaqus。安装器会先把桌面助手安装到当前用户的 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，同时安装 Codex Skill 并创建桌面快捷方式；历史记录和快照仍放在独立的 `%LOCALAPPDATA%\AbaqusCodexAssistant` 数据目录。随后再检测 Abaqus，只有可用的 Abaqus 2021 会自动安装当前已完成真机验证的安全修改插件：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1
 ```
 
-MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
+MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`，它们仍会按各自的版本兼容规则检查。非 2021 版本可以安装核心助手和 Skill，但不会被误报为已能安全修改模型。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
 
 ### 开发者：从源码运行
 

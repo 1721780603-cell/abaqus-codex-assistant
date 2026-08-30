@@ -731,7 +731,7 @@ class DesktopAssistantApp:
             "name", width=self._px(230), anchor="w", stretch=True
         )
         self.environment_tree.column(
-            "status", width=self._px(130), anchor="center", stretch=False
+            "status", width=self._px(185), anchor="center", stretch=False
         )
         self.environment_tree.tag_configure(
             "success", foreground=COLOR_SUCCESS
@@ -782,6 +782,13 @@ class DesktopAssistantApp:
             pady=(0, self._px(14)),
         )
         actions.grid_columnconfigure(0, weight=1)
+        self.environment_copy_button = ttk.Button(
+            actions,
+            text="复制给 Codex",
+            style="Secondary.TButton",
+            command=self._copy_selected_environment_next_step,
+        )
+        self.environment_copy_button.grid(row=0, column=0, sticky="w")
         self.environment_refresh_button = ttk.Button(
             actions,
             text="重新检查",
@@ -900,6 +907,24 @@ class DesktopAssistantApp:
         self._set_readonly_text(
             self.environment_detail_text,
             format_environment_detail(item),
+        )
+
+    def _copy_selected_environment_next_step(self) -> None:
+        """只复制当前检查项的公开处理提示，不执行安装或登录。"""
+
+        selection = self.environment_tree.selection()
+        if not selection:
+            self.environment_summary_var.set("请先选择一个检查项。")
+            return
+        item = self.environment_items_by_id.get(selection[0])
+        if item is None:
+            self.environment_summary_var.set("当前检查项没有可复制内容。")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(item.next_step)
+        self.root.update_idletasks()
+        self.environment_summary_var.set(
+            "已复制“{0}”的下一步，可粘贴到 Codex 对话中。".format(item.name)
         )
 
     def _record_history(self, *, title: str, status: str, details: str) -> None:

@@ -22,6 +22,18 @@ class DistributionInstallerTests(unittest.TestCase):
         self.assertNotIn(r"C:\Users\zzj", text)
         self.assertIn("$PSScriptRoot", text)
         self.assertIn("LOCALAPPDATA", text)
+        self.assertIn(r"Programs\AbaqusCodexAssistant", text)
+
+    def test_program_files_do_not_replace_runtime_data_directory(self):
+        """程序目录必须与历史、快照和动作队列的数据目录分离。"""
+
+        installer = INSTALLER.read_text(encoding="utf-8")
+        uninstaller = UNINSTALLER.read_text(encoding="utf-8")
+        direct_data_target = 'Join-Path $env:LOCALAPPDATA "AbaqusCodexAssistant"'
+        self.assertNotIn(direct_data_target, installer)
+        self.assertNotIn(direct_data_target, uninstaller)
+        self.assertIn(r'"Programs\AbaqusCodexAssistant"', installer)
+        self.assertIn(r'"Programs\AbaqusCodexAssistant"', uninstaller)
 
     def test_powershell_entrypoints_are_ascii_for_windows_51(self):
         """避免 Windows PowerShell 5.1 把无 BOM 中文脚本解析成乱码。"""
@@ -43,14 +55,42 @@ class DistributionInstallerTests(unittest.TestCase):
         self.assertIn('Read-Host "Type INSTALL to continue"', text)
         self.assertNotIn('"pip", "install"', text)
 
-    def test_installer_distributes_skill_and_safe_plugin(self):
-        """统一入口必须同时包含 Skill 和已验证的安全插件。"""
+    def test_shortcut_uses_stable_system_command_target(self):
+        """快捷方式目标不能被沙箱或用户目录路径映射改写。"""
+
+        text = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("$shortcut.TargetPath = $env:ComSpec", text)
+        self.assertIn("$shortcut.Arguments", text)
+        self.assertNotIn(
+            '$shortcut.TargetPath = Join-Path $InstallRoot',
+            text,
+        )
+
+    def test_installer_separates_core_install_from_safe_plugin(self):
+        """先装核心组件，随后才检测 Abaqus 并决定是否安装安全插件。"""
 
         text = INSTALLER.read_text(encoding="utf-8")
         self.assertIn(r".codex\skills\abaqus-modeling-guide", text)
+        self.assertIn("install-preflight", text)
+        self.assertIn("$installSafePlugin", text)
+        self.assertIn("if ($installSafePlugin)", text)
         self.assertIn("assistant-setup", text)
-        self.assertIn("--dry-run", text)
         self.assertIn("--yes", text)
+        self.assertNotIn('"assistant-setup", "--dry-run"', text)
+        self.assertIn("plugin_installed = $pluginInstalled", text)
+        self.assertIn("Abaqus detection: after core installation", text)
+        self.assertLess(
+            text.index('$installedPython = Join-Path $InstallRoot'),
+            text.index("install-preflight --json"),
+        )
+        self.assertNotIn("Abaqus was not detected. Install Abaqus", text)
+
+    def test_uninstaller_skips_plugin_not_owned_by_install(self):
+        """核心模式未安装插件时，卸载器不得移动用户原有插件。"""
+
+        text = UNINSTALLER.read_text(encoding="utf-8")
+        self.assertIn('Properties["plugin_installed"]', text)
+        self.assertIn("if ($pluginInstalled)", text)
 
     def test_credentials_are_not_embedded_or_copied(self):
         """发布脚本不能尝试搬运 Codex 或论文数据库会话。"""

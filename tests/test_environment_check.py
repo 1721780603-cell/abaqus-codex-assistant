@@ -27,13 +27,20 @@ def sample_result():
             },
             "abqpy": {
                 "usable": False,
+                "installed": False,
                 "version": None,
+                "recommended_requirement": "abqpy==2021.*",
                 "message": "当前环境没有安装 abqpy。",
             },
             "mcp": {
                 "responsive": False,
                 "message": "MCP 文件存在，但尚未注册。",
             },
+        },
+        "version_plan": {
+            "recommended_abqpy_requirement": "abqpy==2021.*",
+            "abqpy_action": "install_matching",
+            "verification_level": "maintainer_verified",
         },
         "git": {
             "usable": True,
@@ -71,9 +78,66 @@ class EnvironmentCheckTests(unittest.TestCase):
         items = build_environment_items(sample_result(), None)
         abqpy = next(item for item in items if item.name == "abqpy")
 
-        self.assertEqual(abqpy.status, "待配置")
-        self.assertIn("询问是否安装", abqpy.next_step)
+        self.assertEqual(abqpy.status, "需安装 abqpy==2021.*")
+        self.assertIn("Abaqus 年份：2021", abqpy.detail)
+        self.assertIn("严格匹配要求：abqpy==2021.*", abqpy.detail)
+        self.assertIn("复制给 Codex", abqpy.next_step)
+        self.assertIn("我确认当前使用 Abaqus 2021", abqpy.next_step)
         self.assertIn("建议先处理 abqpy", summarize_environment(items))
+
+    def test_2022_to_2025_generate_same_year_only_instruction(self):
+        """常用候选版本只能建议同年份 abqpy，并提醒先做小模型验证。"""
+
+        for year in (2022, 2023, 2024, 2025):
+            with self.subTest(year=year):
+                result = sample_result()
+                requirement = "abqpy=={0}.*".format(year)
+                result["environment"]["abaqus"]["version"] = str(year)
+                result["environment"]["abqpy"]["recommended_requirement"] = requirement
+                result["version_plan"].update(
+                    {
+                        "recommended_abqpy_requirement": requirement,
+                        "verification_level": "detected_unverified",
+                    }
+                )
+
+                abqpy = next(
+                    item
+                    for item in build_environment_items(result, None)
+                    if item.name == "abqpy"
+                )
+
+                self.assertIn(requirement, abqpy.detail)
+                self.assertIn(requirement, abqpy.next_step)
+                self.assertIn("尚未完成维护者真机验证", abqpy.next_step)
+                for wrong_year in (2021, 2022, 2023, 2024, 2025):
+                    if wrong_year != year:
+                        self.assertNotIn(
+                            "abqpy=={0}.*".format(wrong_year),
+                            abqpy.next_step,
+                        )
+
+    def test_2026_never_offers_install_instruction(self):
+        """已知不兼容年份只能阻断，不能生成可执行安装口令。"""
+
+        result = sample_result()
+        result["environment"]["abaqus"]["version"] = "2026"
+        result["environment"]["abqpy"]["recommended_requirement"] = None
+        result["version_plan"] = {
+            "recommended_abqpy_requirement": None,
+            "abqpy_action": "unsupported",
+            "verification_level": "known_incompatible",
+        }
+
+        abqpy = next(
+            item
+            for item in build_environment_items(result, None)
+            if item.name == "abqpy"
+        )
+
+        self.assertEqual(abqpy.status, "版本不支持")
+        self.assertIn("禁止自动安装", abqpy.next_step)
+        self.assertNotIn("请安装严格匹配", abqpy.next_step)
 
     def test_detail_repeats_read_only_boundary(self):
         """每个详情都持续说明体检不会修改电脑或模型。"""

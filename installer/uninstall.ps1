@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
         throw "LOCALAPPDATA is not available."
     }
-    $InstallRoot = Join-Path $env:LOCALAPPDATA "AbaqusCodexAssistant"
+    $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\AbaqusCodexAssistant"
 }
 
 $manifestPath = Join-Path $InstallRoot "install-manifest.json"
@@ -34,11 +34,15 @@ $expectedPluginTarget = Join-Path $userProfileRoot "abaqus_plugins\safe_material
 if ([string]$manifest.skill_target -ne $expectedSkillTarget -or [string]$manifest.plugin_target -ne $expectedPluginTarget) {
     throw "Managed component paths do not match the manifest owner. No files were removed."
 }
+$pluginInstalled = $true
+if ($null -ne $manifest.PSObject.Properties["plugin_installed"]) {
+    $pluginInstalled = [bool]$manifest.plugin_installed
+}
 
 Write-Host "Uninstall plan"
 Write-Host "  Application: $InstallRoot"
 Write-Host "  Codex skill: $($manifest.skill_target)"
-Write-Host "  Abaqus plugin: $expectedPluginTarget"
+Write-Host "  Abaqus plugin installed by setup: $pluginInstalled"
 Write-Host "Abaqus, Codex, user models, CAE files, ODB files, credentials, and old backups are outside this removal scope."
 
 if (-not $Yes) {
@@ -55,7 +59,11 @@ if (-not $PSCmdlet.ShouldProcess($InstallRoot, "Uninstall Abaqus Codex Assistant
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $skillTarget = $expectedSkillTarget
 $pluginTarget = $expectedPluginTarget
-foreach ($target in @($skillTarget, $pluginTarget)) {
+$managedTargets = @($skillTarget)
+if ($pluginInstalled) {
+    $managedTargets += $pluginTarget
+}
+foreach ($target in $managedTargets) {
     if (-not [string]::IsNullOrWhiteSpace($target) -and (Test-Path -LiteralPath $target)) {
         Move-Item -LiteralPath $target -Destination "$target.uninstalled-$stamp"
     }
