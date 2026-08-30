@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -30,6 +31,11 @@ MAX_RESULT_BYTES = 256 * 1024
 MAX_STATUS_BYTES = 16 * 1024
 DEFAULT_STATUS_MAX_AGE_SECONDS = 5.0
 DEFAULT_POLL_INTERVAL_SECONDS = 0.05
+
+# 报告回执只允许携带简单英文文件名，避免不同操作系统对路径的解释不一致。
+SAFE_REPORT_NAME_PATTERN = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,126}\.md$", re.IGNORECASE
+)
 
 
 SAFE_ERROR_MESSAGES = {
@@ -549,8 +555,8 @@ class SafeActionFileBridge:
         report_name = data["report_name"]
         if (
             not isinstance(report_name, str)
-            or not report_name.lower().endswith(".md")
-            or Path(report_name).name != report_name
+            or SAFE_REPORT_NAME_PATTERN.fullmatch(report_name) is None
+            or ".." in report_name
         ):
             raise SafeActionProtocolError("报告文件名不安全。")
         return dict(data)

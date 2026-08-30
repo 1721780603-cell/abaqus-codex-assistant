@@ -212,7 +212,39 @@ class GuidedBridgeReceiptTests(unittest.TestCase):
             )
 
     def test_results_receipt_rejects_report_path(self):
-        """报告回执只能返回文件名，不能泄露或注入完整路径。"""
+        """各种平台的路径都不能伪装成报告文件名。"""
+
+        plan = _plan(STAGE_RESULTS)
+        action = plan["actions"][0]
+        base_receipt = {
+            "plan_id": plan["plan_id"],
+            "action_id": action["id"],
+            "stage": "results",
+            "model": "Model-1",
+            "job": "rectangle_tension_2d",
+            "maximum_displacement": 0.1,
+            "maximum_mises_stress": 210.0,
+            "length_unit": "mm",
+            "stress_unit": "MPa",
+            "cae_unchanged": True,
+        }
+        unsafe_names = (
+            "C:\\private\\report.md",
+            "/private/report.md",
+            "../report.md",
+            "..\\report.md",
+        )
+        for unsafe_name in unsafe_names:
+            with self.subTest(report_name=unsafe_name):
+                receipt = dict(base_receipt, report_name=unsafe_name)
+                bridge = SafeActionFileBridge()
+                with patch.object(
+                    bridge, "_exchange", return_value={"data": receipt}
+                ), self.assertRaises(SafeActionProtocolError):
+                    bridge.apply_guided_plan(plan)
+
+    def test_results_receipt_accepts_safe_report_name(self):
+        """安全回执可以返回固定格式的 Markdown 报告文件名。"""
 
         plan = _plan(STAGE_RESULTS)
         action = plan["actions"][0]
@@ -226,14 +258,17 @@ class GuidedBridgeReceiptTests(unittest.TestCase):
             "maximum_mises_stress": 210.0,
             "length_unit": "mm",
             "stress_unit": "MPa",
-            "report_name": "C:\\private\\report.md",
+            "report_name": "rectangle_tension_2d_report_zh_001.md",
             "cae_unchanged": True,
         }
         bridge = SafeActionFileBridge()
         with patch.object(
             bridge, "_exchange", return_value={"data": receipt}
-        ), self.assertRaises(SafeActionProtocolError):
-            bridge.apply_guided_plan(plan)
+        ):
+            self.assertEqual(
+                bridge.apply_guided_plan(plan)["report_name"],
+                "rectangle_tension_2d_report_zh_001.md",
+            )
 
 
 if __name__ == "__main__":
