@@ -20,18 +20,20 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 
 ### 1. 找到项目并运行首次向导
 
-先只读定位包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/` 的项目根目录，按以下顺序检查：
+先只读定位完整应用或源码项目，并确定后续所有命令使用的“项目 Python 绝对路径”。按以下顺序检查：
 
-1. 统一安装器的默认目录 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`；
-2. 当前目录及其父目录；
+1. EXE 安装版的默认目录 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`；若其中存在 `runtime\python.exe`，项目 Python 就是该文件的绝对路径；
+2. 当前目录及其父目录；源码项目应同时包含 `pyproject.toml`、`configs/` 和 `src/abaqus_codex/`，项目 Python 是该项目下实际存在的 `.venv\Scripts\python.exe` 绝对路径；
 3. 用户明确提供的目录。
 
-默认目录存在时优先使用其中的私有 `.venv`，不要重新创建环境。不要无边界扫描用户文件，也不要根据维护者电脑猜测路径。以上位置均无法找到时，只问用户是否已经安装完整应用以及项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。只安装本 Skill 不代表完整应用已经存在。
+不要仅凭目录存在就判断应用可用；必须确认对应的项目 Python 文件存在。不要无边界扫描用户文件，也不要根据维护者电脑猜测路径。以上位置均无法找到时，只问用户是否已经安装完整应用以及项目放在哪里；项目尚未安装时，读取 [references/setup.md](references/setup.md)。只安装本 Skill 不代表完整应用已经存在。
+
+普通用户应优先使用 EXE 安装版；它自带项目 Python，不要求用户另装 Python 或 Git。源码模式才使用项目自己的 `.venv`。无论哪种模式，先把实际文件解析为绝对路径并向用户显示；后续示例中的 `<检测到的项目 Python 绝对路径>` 必须替换为这个值，不能固定写成 `.venv`，也不能退回未知的系统 Python。
 
 在项目根目录运行统一只读体检；不要用零散命令替代首次体检：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
+& "<检测到的项目 Python 绝对路径>" -m abaqus_codex onboard --json
 ```
 
 命令只检查，不会自动安装或登录。读取 JSON 后，用初学者可理解的语言分别解释项目 Python、Abaqus 内置 Python、abqpy、Abaqus MCP、Git、GitHub CLI 登录和 Zotero 状态；不能把 Git 已安装说成 GitHub 已登录，也不能把 MCP 已注册说成当前 Abaqus 会话已连接。ScienceDirect 机构访问只能标记为“需用户确认”。涉及 Abaqus 年份、Python 代际或 MCP 兼容性时，先读取 [references/version-compatibility.md](references/version-compatibility.md)，不能把“检测到”说成“已经验证支持”。然后只问一个问题：
@@ -58,7 +60,7 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 若 `configs/user_profile.json` 不存在，让用户从 `learning`（入门学习）、`paper`（论文复现）、`research`（科研参数分析）、`production`（实际工程）和 `teaching`（教学演示）中选择一个，然后运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex configure --scenario <场景名称>
+& "<检测到的项目 Python 绝对路径>" -m abaqus_codex configure --scenario <场景名称>
 ```
 
 运行前说明该命令会创建本机 `configs/user_profile.json`，展示所选场景并征得确认；没有确认时只记录对话中的选择，不写文件。
@@ -98,7 +100,7 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 写入配置后运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex validate --config <配置路径>
+& "<检测到的项目 Python 绝对路径>" -m abaqus_codex validate --config <配置路径>
 ```
 
 校验失败时只修正报告指出的问题，不绕过校验器。校验通过后给出一张简短摘要，至少包含几何、材料、载荷/位移、约束、网格和单位，并明确说明“Abaqus 尚未启动”。
@@ -110,7 +112,7 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 得到同意后运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run --config <配置路径>
+& "<检测到的项目 Python 绝对路径>" -m abaqus_codex run --config <配置路径>
 ```
 
 一次只启动一个新作业。失败后先读程序给出的日志路径和末尾错误，不用相同输入无休止重试。

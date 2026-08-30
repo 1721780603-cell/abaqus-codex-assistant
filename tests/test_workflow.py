@@ -145,6 +145,10 @@ class AutomationVersionGateTests(unittest.TestCase):
                     "abaqus_codex.workflow.subprocess.run",
                     return_value=completed,
                 ) as run_mock,
+                patch(
+                    "abaqus_codex.workflow.activate_user_python_packages",
+                    return_value=root / "user-packages",
+                ),
             ):
                 with self.assertRaisesRegex(RuntimeError, "Abaqus 返回退出码"):
                     run_analysis(
@@ -156,6 +160,11 @@ class AutomationVersionGateTests(unittest.TestCase):
         child_environment = run_mock.call_args.kwargs["env"]
         self.assertEqual(
             child_environment["ABAQUS_BAT_PATH"], checked_command
+        )
+        self.assertTrue(
+            child_environment["PYTHONPATH"].startswith(
+                str(root / "user-packages")
+            )
         )
 
 

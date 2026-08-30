@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from abaqus_codex.mcp_guard import inspect_bridge_status
+from abaqus_codex.paths import project_python_executable
 
 
 def vendor_python_paths(vendor_path: Path) -> List[Path]:
@@ -169,7 +170,7 @@ def verify_local_mcp_import(
     for dependency_mode, environment in attempts:
         try:
             completed = subprocess.run(
-                [sys.executable, "-c", python_code],
+                [str(project_python_executable()), "-c", python_code],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 env=environment,

@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from abaqus_codex import __version__
 from abaqus_codex.desktop_assistant.codex_status import _find_codex_executable
+from abaqus_codex.paths import user_data_root
 
 
 MAX_PROTOCOL_LINE = 2 * 1024 * 1024
@@ -127,9 +129,7 @@ def normalize_ai_prompt(value: object) -> str:
 def default_ai_workspace() -> Path:
     """使用不含 CAE 文件的独立目录作为只读咨询工作区。"""
 
-    local_data = os.environ.get("LOCALAPPDATA", "").strip()
-    base = Path(local_data) if local_data else Path.home()
-    return (base / "AbaqusCodexAssistant" / "ai_workspace").resolve()
+    return (user_data_root() / "ai_workspace").resolve()
 
 
 class CodexReadOnlyClient:
@@ -200,7 +200,7 @@ class CodexReadOnlyClient:
                 "clientInfo": {
                     "name": "abaqus_codex_assistant",
                     "title": "Abaqus 中文建模助手",
-                    "version": "0.2.0a1",
+                    "version": __version__,
                 }
             },
             timeout_seconds=15.0,

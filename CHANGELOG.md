@@ -6,6 +6,21 @@
 
 尚无。
 
+## [0.2.2-alpha] - 2026-08-31
+
+### 新增
+
+- 提供普通用户可直接双击的自包含 Windows x64 Setup，内置隔离的官方 Python 3.12.10 运行时，不再要求预装 Python、Git、下载源码或运行 PowerShell；
+- 安装到当前用户目录并提供明确命名的 `AbaqusCodexAssistant.exe` 应用入口、开始菜单和桌面快捷方式，可从 Windows“设置 → 应用”卸载；
+- 安装版把只读程序资源与 `%LOCALAPPDATA%\AbaqusCodexAssistant` 用户数据分开，并支持自定义 `CODEX_HOME`；
+- 新增可恢复的 `integration-setup` / `integration-remove`，只管理本项目 Skill 和经实时版本校验的 Abaqus 2021 安全插件，保留旧目录备份与用户修改；
+- 构建过程固定校验官方 Python ZIP 的 SHA-256，生成 Setup 同步校验文件，并加入隔离安装、启动和卸载回归验证。
+
+### 安全边界
+
+- Setup 不包含 Abaqus、许可证、Codex 账号、Cookie、API Key、CAE、ODB 或论文数据库会话；abqpy 与 MCP 继续在环境体检后由用户单独确认；
+- 未购买代码签名证书，本 Alpha 安装包可能显示 Windows“未知发布者”，官方 Release 同时公布 SHA-256 供核验。
+
 ## [0.2.1-alpha] - 2026-08-31
 
 ### 修复

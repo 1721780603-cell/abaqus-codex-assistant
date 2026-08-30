@@ -46,18 +46,35 @@
 ## 运行要求
 
 - Windows 10/11；
-- Python 3.10 或更高版本；
+- 普通用户使用 EXE 安装版时，无需另装 Python 或 Git；安装包自带项目 Python；
+- 只有从源码开发或运行源码备用安装时，才需要 Python 3.10 或更高版本；Git 只在克隆、贡献或 GitHub 工作流中需要；
 - 安装和打开核心助手不要求先装 Abaqus；创建或求解真实模型时，必须已有合法安装、可用许可证和明确版本的 Abaqus；
-- Git 仅为源码开发或 GitHub 工作流所需；
+- Codex 智能模式使用用户本人安装并登录的 Codex；应用不会附带账号、共享额度或复制登录凭据；
 - Abaqus 2021–2025 使用与年份严格匹配的 `abqpy==<年份>.*`，例如 Abaqus 2024 使用 `abqpy==2024.*`；Abaqus 2026 自动流程当前禁用；
 - Codex 和 Abaqus MCP 仅为智能模式所需。
 - 三维移动载荷示例还需要与 Abaqus 匹配的 Visual Studio 和 Intel Fortran Classic。
 
 项目不分发 Abaqus，也不绕过许可证。
 
-## 两条安装路径
+## 安装方式（普通用户首选 EXE）
 
-### 路径一：只安装 Codex Skill
+### 首选：双击 EXE 安装完整应用
+
+普通用户从 [GitHub Releases](https://github.com/1721780603-cell/abaqus-codex-assistant/releases) 下载 `AbaqusCodexAssistant-Setup-<版本>-x64.exe`，双击后按提示安装即可。不需要下载源码、手工创建虚拟环境、运行 PowerShell，也不需要预装 Python 或 Git。
+
+安装完成后：
+
+- 桌面快捷方式直接启动中文建模助手 `AbaqusCodexAssistant.exe`；
+- 应用安装在 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`；
+- 自带的项目 Python 位于 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant\runtime\python.exe`；
+- Codex Skill 随应用安装，但不会复制任何账号、API Key、Cookie 或会话；
+- Abaqus、合法许可证以及用户本人的 Codex 安装和登录仍需自行准备。
+
+首次打开先运行“环境体检”。abqpy 和 MCP 默认不静默安装：体检确认 Abaqus 年份后，助手才会分别说明严格匹配的 abqpy 版本以及 MCP 对用户级配置的影响，并在用户明确同意后处理。基础建模不要求 MCP。
+
+`AbaqusCodexAssistant.exe` 是用户直接使用的应用入口；同目录内的私有 Python 只是程序内部运行零件。Abaqus 自带 Python 仍只负责对应年份的 Abaqus 建模与求解，两者不会要求用户手工切换。
+
+### 可选：只安装 Codex Skill
 
 这条路径只安装对话向导，适合体验逐步提问、环境解释和安装引导。**只装 Skill 不等于安装完整应用**：它不会安装桌面助手、项目 Python 环境、Abaqus 插件、abqpy 或 MCP，也不能单独执行建模。
 
@@ -75,23 +92,23 @@
 
 体检完成后，向导会一次只询问一组建模参数。它把个人配置保存在 `configs/user_models/`，先运行离线校验，并在得到明确确认后才启动 Abaqus。Skill 不包含 Abaqus，也不会绕过许可证或自动上传模型文件。电脑上尚无完整应用时，向导只会引导用户下载 Release，不会把 Skill 误报成已经具备建模能力。
 
-### 路径二：安装完整桌面应用
+### 开发或备用：从源码安装
 
-从 GitHub Releases 下载并完整解压项目后，可先查看不会写入电脑的安装计划：
+只有参与开发、排查打包问题或 EXE 暂时无法使用时，才从 GitHub Releases 下载完整源码包并整体解压。不能只下载 `installer/install.ps1`。可先查看不会写入电脑的安装计划：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -WhatIf
 ```
 
-可以直接运行统一安装，不要求先检测到 Abaqus。安装器会先把桌面助手安装到当前用户的 `%LOCALAPPDATA%\Programs\AbaqusCodexAssistant`，同时安装 Codex Skill 并创建桌面快捷方式；历史记录和快照仍放在独立的 `%LOCALAPPDATA%\AbaqusCodexAssistant` 数据目录。随后再检测 Abaqus，只有可用的 Abaqus 2021 会自动安装当前已完成真机验证的安全修改插件：
+源码备用安装需要本机已有 Python 3.10 或更高版本，但不要求先检测到 Abaqus。安装器会先安装桌面助手和 Skill，再检测 Abaqus：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1
 ```
 
-MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`，它们仍会按各自的版本兼容规则检查。非 2021 版本可以安装核心助手和 Skill，但不会被误报为已能安全修改模型。安装器不会复制维护者或用户的 Codex 登录、API Key、Cookie、许可证或论文数据库会话。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
+MCP 和 abqpy 会联网，因此默认不安装；用户明确需要时才增加 `-InstallMcp` 或 `-InstallAbqpy`，它们仍会按各自的版本兼容规则检查。升级、修复和卸载说明见 [Windows 统一安装向导](installer/README.md)。
 
-已经单独安装过旧版 Skill 时，不要手工覆盖目录。下载新的完整 Release 后运行下面的修复安装；安装器会先备份旧 Skill 和旧应用目录：
+已经单独安装过旧版 Skill 时，不要手工覆盖目录。普通用户直接运行新版 EXE 升级；源码备用模式可运行下面的修复安装：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -Mode Repair
@@ -99,28 +116,33 @@ powershell -ExecutionPolicy Bypass -File .\installer\install.ps1 -Mode Repair
 
 ## 快速开始
 
+### 普通用户：从桌面快捷方式启动
+
+运行 EXE 安装器后，双击桌面的 “Abaqus Codex Assistant”。第一次先打开“环境体检”，确认应用显示的项目 Python、Abaqus 路径和年份符合当前电脑；然后再选择基础建模或 Codex 智能模式。普通用户通常不需要手工运行下面的 Python 命令。
+
 ### 开发者：从源码运行
 
 以下命令在 PowerShell 的项目根目录运行。先安装项目并进行只读体检，不要在尚未确认 Abaqus 年份时直接安装最新版 abqpy：
 
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m abaqus_codex onboard
+$ProjectPython = (Resolve-Path ".\.venv\Scripts\python.exe").Path
+& $ProjectPython -m pip install --upgrade pip
+& $ProjectPython -m pip install -e .
+& $ProjectPython -m abaqus_codex onboard
 ```
 
 先在不连接 Abaqus 的情况下打开中文助手模拟界面：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex assistant --mock
+& $ProjectPython -m abaqus_codex assistant --mock
 ```
 
 真实使用前，先演练并安装安全材料动作插件：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex assistant-setup --dry-run
-.\.venv\Scripts\python.exe -m abaqus_codex assistant-setup --yes
+& $ProjectPython -m abaqus_codex assistant-setup --dry-run
+& $ProjectPython -m abaqus_codex assistant-setup --yes
 ```
 
 关闭并重新打开 Abaqus/CAE 2021，打开一个已经保存过的 CAE；如需刷新完整对象名称摘要，再点击：
@@ -132,7 +154,7 @@ Plug-ins → Abaqus Codex Assistant → Refresh Read-Only Snapshot
 再启动桌面助手：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex assistant
+& $ProjectPython -m abaqus_codex assistant
 ```
 
 Windows 用户也可以直接双击项目根目录中的 `启动中文建模助手.cmd`。该启动器只使用项目自己的虚拟环境；如果环境尚未安装，会显示明确提示而不会改用未知的系统 Python。为兼容不同 Windows 代码页，启动文件本身只使用 ASCII 字符，中文操作说明保留在本文档和应用界面中。可以为这个文件创建桌面快捷方式，移动项目后需要重新创建快捷方式。
@@ -141,11 +163,25 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 
 初学者不需要背诵十条固定句式：每一步成功后，输入框会自动填入下一条命令；“查看十步指令”可随时查看每一步目的和完整句式。“操作记录”会把以后生成的计划、执行成功或失败结果保存到本机，关闭助手后仍可回看；记录不包含完整路径、凭据或模型文件。
 
+下面的高级命令同时适用于 EXE 安装版和源码版。先确定当前模式的项目 Python，并确认文件存在；不要从别人的电脑复制绝对路径，也不要改用未知的系统 Python：
+
+```powershell
+# EXE 安装版
+$ProjectPython = [System.IO.Path]::GetFullPath("$env:LOCALAPPDATA\Programs\AbaqusCodexAssistant\runtime\python.exe")
+
+# 源码版请改用这一行
+# $ProjectPython = (Resolve-Path ".\.venv\Scripts\python.exe").Path
+
+Test-Path -LiteralPath $ProjectPython
+```
+
+只有 `Test-Path` 返回 `True` 时才继续。应用或 Skill 自动执行时也必须使用检测到的项目 Python 绝对路径。
+
 体检显示的 Abaqus 命令路径符合预期、且年份为当前允许继续的 2021–2025 后，再让项目安装同年份的 abqpy。下面的命令会联网修改当前项目 Python，因此只在核对安装计划并同意后使用 `--yes`：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex abqpy-setup --yes
-.\.venv\Scripts\python.exe -m abaqus_codex onboard
+& $ProjectPython -m abaqus_codex abqpy-setup --yes
+& $ProjectPython -m abaqus_codex onboard
 ```
 
 安装器始终生成严格年份规格：Abaqus 2021 对应 `abqpy==2021.*`，Abaqus 2024 对应 `abqpy==2024.*`，不会安装不带年份限制的最新版。
@@ -159,8 +195,8 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 运行首次启动体检；普通输出适合人阅读，JSON 输出适合 Skill 判断下一步：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex onboard
-.\.venv\Scripts\python.exe -m abaqus_codex onboard --json
+& $ProjectPython -m abaqus_codex onboard
+& $ProjectPython -m abaqus_codex onboard --json
 ```
 
 这两个命令只读取状态，不会安装软件、修改配置或替用户登录。ScienceDirect 状态会保持为“需要用户确认”，不会根据浏览器 Cookie 猜测登录成功。
@@ -168,19 +204,19 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 只检查 Abaqus、abqpy 和 MCP 核心环境：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex doctor
+& $ProjectPython -m abaqus_codex doctor
 ```
 
 如需智能模式，在阅读安全说明后安装或注册 MCP：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex mcp-setup --yes
+& $ProjectPython -m abaqus_codex mcp-setup --yes
 ```
 
 已有 MCP 点击后一直转圈时，安装防卡启动器并更新注册：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex mcp-setup --repair --yes
+& $ProjectPython -m abaqus_codex mcp-setup --repair --yes
 ```
 
 详细原因和排查步骤见 [Abaqus MCP 一直转圈排查](docs/mcp-troubleshooting.md)。
@@ -188,9 +224,9 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 如果 GUI 模式仍导致进度条和鼠标转圈，使用无界面后台桥接：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless start
-.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless status
-.\.venv\Scripts\python.exe -m abaqus_codex mcp-headless stop
+& $ProjectPython -m abaqus_codex mcp-headless start
+& $ProjectPython -m abaqus_codex mcp-headless status
+& $ProjectPython -m abaqus_codex mcp-headless stop
 ```
 
 该模式使用独立 Abaqus/CAE 许可证会话，不显示操作界面，也不会预先打开任何私人模型。
@@ -198,19 +234,19 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 保存使用场景：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex configure --scenario learning
+& $ProjectPython -m abaqus_codex configure --scenario learning
 ```
 
 检查本地 AI（可选）：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex local-ai doctor
+& $ProjectPython -m abaqus_codex local-ai doctor
 ```
 
 用 Ollama 生成一份矩形板配置；程序会先显示完整 JSON，确认后才保存：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex local-ai generate `
+& $ProjectPython -m abaqus_codex local-ai generate `
   --provider ollama `
   --model "你的本机模型名称" `
   --prompt "建立长 200 mm、高 100 mm、厚 2 mm 的矩形板，右边拉伸 0.2 mm。"
@@ -221,7 +257,7 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 在启动 Abaqus 前单独检查任意受支持的配置：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex validate --config .\configs\rectangle_tension.json
+& $ProjectPython -m abaqus_codex validate --config .\configs\rectangle_tension.json
 ```
 
 命令只读取并规范化 JSON，不占用 Abaqus 许可证。
@@ -229,31 +265,31 @@ Windows 用户也可以直接双击项目根目录中的 `启动中文建模助�
 运行二维矩形板拉伸示例：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run
+& $ProjectPython -m abaqus_codex run
 ```
 
 运行二维中心圆孔板拉伸示例：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\plate_with_hole_tension.json
+& $ProjectPython -m abaqus_codex run --config .\configs\plate_with_hole_tension.json
 ```
 
 运行二维悬臂梁均布载荷弯曲示例：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\cantilever_bending.json
+& $ProjectPython -m abaqus_codex run --config .\configs\cantilever_bending.json
 ```
 
 运行二维方板双向拉伸示例：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\biaxial_tension.json
+& $ProjectPython -m abaqus_codex run --config .\configs\biaxial_tension.json
 ```
 
 运行三维路面单轮移动载荷示例：
 
 ```powershell
-.\.venv\Scripts\python.exe -m abaqus_codex run --config .\configs\moving_load_road.json
+& $ProjectPython -m abaqus_codex run --config .\configs\moving_load_road.json
 ```
 
 移动载荷会编译项目生成的 Fortran DLOAD。首次使用前请阅读[移动载荷入门说明](docs/moving-load-dload.md)。
@@ -342,12 +378,12 @@ abaqus-codex-assistant/
 开发环境应安装测试依赖：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+& $ProjectPython -m pip install -e ".[test]"
 ```
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location) "src")
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+& $ProjectPython -m unittest discover -s tests -v
 ```
 
 GitHub Actions 只运行不依赖 Abaqus 许可证的测试。真实求解必须在已安装 Abaqus 的电脑上运行。

@@ -12,6 +12,7 @@ from typing import Optional, Sequence
 from abaqus_codex.configuration import ConfigurationError, load_config
 from abaqus_codex.doctor import main as doctor_main
 from abaqus_codex.local_ai import LocalAIError, SUPPORTED_PROVIDERS
+from abaqus_codex.paths import resource_root, user_data_root
 from abaqus_codex.scenario import SCENARIOS, prompt_scenario, save_profile
 
 
@@ -25,15 +26,15 @@ def _configure_utf8_output() -> None:
 
 
 def project_root() -> Path:
-    """返回源码所在项目根目录。"""
+    """返回安装版或源码模式的只读资源根。"""
 
-    return Path(__file__).resolve().parents[2]
+    return resource_root()
 
 
 def _build_parser() -> argparse.ArgumentParser:
     """创建命令行参数解析器。"""
 
-    root = project_root()
+    data_root = user_data_root()
     parser = argparse.ArgumentParser(
         prog="abaqus-codex",
         description="面向初学者的 Abaqus 环境体检、建模和结果报告工具。",
@@ -75,6 +76,56 @@ def _build_parser() -> argparse.ArgumentParser:
         "--yes",
         action="store_true",
         help="确认安装到当前用户的 abaqus_plugins；不同旧版会先备份。",
+    )
+
+    integration_setup_parser = subparsers.add_parser(
+        "integration-setup",
+        help="为当前用户安装 Codex Skill 和已验证的 Abaqus 插件。",
+    )
+    integration_setup_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认写入当前用户的 Skill/插件目录。",
+    )
+    integration_setup_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只校验资源和安装计划，不写入任何目录。",
+    )
+    integration_setup_parser.add_argument(
+        "--codex-home",
+        type=Path,
+        help="显式指定 Codex 用户目录；默认遵循 CODEX_HOME。",
+    )
+    integration_setup_parser.add_argument(
+        "--data-root",
+        type=Path,
+        help="安装器显式锁定的用户数据/恢复目录。",
+    )
+    integration_setup_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="输出便于安装器读取的 JSON 结果。",
+    )
+
+    integration_remove_parser = subparsers.add_parser(
+        "integration-remove",
+        help="恢复安装前的 Skill/插件，并保留用户改过的目录。",
+    )
+    integration_remove_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="确认移除当前用户的受管集成。",
+    )
+    integration_remove_parser.add_argument(
+        "--data-root",
+        type=Path,
+        help="卸载器显式锁定的用户数据/恢复目录。",
+    )
+    integration_remove_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="输出便于卸载器读取的 JSON 结果。",
     )
 
     install_preflight_parser = subparsers.add_parser(
@@ -150,7 +201,7 @@ def _build_parser() -> argparse.ArgumentParser:
     configure_parser.add_argument(
         "--output",
         type=Path,
-        default=root / "configs" / "user_profile.json",
+        default=data_root / "configs" / "user_profile.json",
         help="场景配置保存位置。",
     )
 
@@ -189,7 +240,7 @@ def _build_parser() -> argparse.ArgumentParser:
     local_ai_generate.add_argument(
         "--output",
         type=Path,
-        default=root / "configs" / "local_ai_rectangle.json",
+        default=data_root / "configs" / "local_ai_rectangle.json",
         help="确认后保存的 JSON 路径。",
     )
     local_ai_generate.add_argument(
@@ -215,19 +266,19 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--config",
         type=Path,
-        default=root / "configs" / "rectangle_tension.json",
+        default=None,
         help="内置 Abaqus 模型的 JSON 配置文件。",
     )
     run_parser.add_argument(
         "--work-root",
         type=Path,
-        default=root / "work" / "runs",
+        default=data_root / "work" / "runs",
         help="Abaqus 临时作业根目录。",
     )
     run_parser.add_argument(
         "--output-root",
         type=Path,
-        default=root / "outputs",
+        default=data_root / "outputs",
         help="结果和报告输出根目录。",
     )
     run_parser.add_argument(
@@ -266,18 +317,66 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
 
         if args.command == "assistant-setup":
-            from abaqus_codex.safe_action_setup import setup_safe_action_plugin
+            from abaqus_codex.paths import is_private_runtime
 
-            result = setup_safe_action_plugin(
-                confirmed=args.yes,
-                dry_run=args.dry_run,
-            )
+            if is_private_runtime():
+                from abaqus_codex.distribution_integration import integration_setup
+
+                integrated = integration_setup(
+                    confirmed=args.yes,
+                    dry_run=args.dry_run,
+                )
+                result = integrated["plugin"]
+            else:
+                from abaqus_codex.safe_action_setup import setup_safe_action_plugin
+
+                result = setup_safe_action_plugin(
+                    confirmed=args.yes,
+                    dry_run=args.dry_run,
+                )
             print(result["message"])
             print("目标目录：{0}".format(result["target"]))
             if result["backup"]:
                 print("旧版备份：{0}".format(result["backup"]))
-            if not result["dry_run"] and result["changed"]:
+            # 安装版路由返回的是集成清单里的 plugin 子项，
+            # 它不单独重复 dry_run 字段；以 CLI 已解析的参数为准。
+            if not args.dry_run and result["changed"]:
                 print("请关闭并重新打开 Abaqus/CAE 2021 后再使用助手。")
+            return 0
+
+        if args.command == "integration-setup":
+            from abaqus_codex.distribution_integration import integration_setup
+
+            result = integration_setup(
+                confirmed=args.yes,
+                codex_home_path=args.codex_home,
+                data_root=args.data_root,
+                dry_run=args.dry_run,
+            )
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                skill = result["skill"]
+                plugin = result["plugin"]
+                print("Codex Skill：{0}".format(skill["target"]))
+                print("安全插件：{0}".format(plugin["message"]))
+                if not result["dry_run"]:
+                    print("用户集成清单：{0}".format(result["manifest_path"]))
+            return 0
+
+        if args.command == "integration-remove":
+            from abaqus_codex.distribution_integration import integration_remove
+
+            result = integration_remove(
+                confirmed=args.yes,
+                data_root=args.data_root,
+            )
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print("Codex Skill：{0}".format(result["skill"]["status"]))
+                print("Abaqus 安全插件：{0}".format(result["plugin"]["status"]))
+                print("原清单已作为可恢复记录保留。")
             return 0
 
         if args.command == "install-preflight":
@@ -398,8 +497,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             # 延后导入，保证仅使用 doctor/configure 时不加载求解流程。
             from abaqus_codex.workflow import run_analysis
 
+            config_path = args.config
+            if config_path is None:
+                config_path = project_root() / "configs" / "rectangle_tension.json"
             result = run_analysis(
-                config_path=args.config.resolve(),
+                config_path=config_path.resolve(),
                 work_root=args.work_root.resolve(),
                 output_root=args.output_root.resolve(),
                 timeout_seconds=args.timeout,

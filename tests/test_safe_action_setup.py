@@ -116,7 +116,10 @@ class SafeActionSetupTests(unittest.TestCase):
             target = root / "plugins" / "safe_material_action"
 
             result = setup_safe_action_plugin(
-                confirmed=True, source=source, target=target
+                confirmed=True,
+                source=source,
+                target=target,
+                backup_root=root / "recovery" / "plugin",
             )
 
             self.assertTrue(result["changed"])
@@ -128,6 +131,31 @@ class SafeActionSetupTests(unittest.TestCase):
             )
 
     @patch("abaqus_codex.safe_action_setup.inspect_abaqus")
+    def test_existing_plain_file_target_is_preserved_and_rejected(
+        self, inspect_mock
+    ):
+        """普通文件不能被当成插件目录备份，否则卸载无法原样恢复。"""
+
+        inspect_mock.return_value = abaqus_result()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = make_plugin(root / "source")
+            target = root / "plugins" / "safe_material_action"
+            target.parent.mkdir()
+            target.write_text("用户文件", encoding="utf-8")
+
+            with self.assertRaisesRegex(SafeActionSetupError, "不是目录"):
+                setup_safe_action_plugin(
+                    confirmed=True,
+                    source=source,
+                    target=target,
+                    backup_root=root / "recovery" / "plugin",
+                )
+
+            self.assertEqual(target.read_text(encoding="utf-8"), "用户文件")
+            self.assertFalse((root / "recovery").exists())
+
+    @patch("abaqus_codex.safe_action_setup.inspect_abaqus")
     def test_identical_install_is_left_untouched(self, inspect_mock):
         """目标内容相同时应直接返回，不生成备份或临时目录。"""
 
@@ -135,16 +163,19 @@ class SafeActionSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = make_plugin(root / "source")
-            target = make_plugin(root / "safe_material_action")
+            target = make_plugin(root / "plugins" / "safe_material_action")
 
             result = setup_safe_action_plugin(
-                confirmed=True, source=source, target=target
+                confirmed=True,
+                source=source,
+                target=target,
+                backup_root=root / "recovery" / "plugin",
             )
 
             self.assertFalse(result["changed"])
             self.assertIsNone(result["backup"])
-            self.assertEqual(list(root.glob("safe_material_action.backup-*")), [])
-            self.assertEqual(list(root.glob(".safe_material_action.installing-*")), [])
+            self.assertEqual(list(target.parent.glob("safe_material_action.backup-*")), [])
+            self.assertEqual(list(target.parent.glob(".safe_material_action.installing-*")), [])
 
     @patch("abaqus_codex.safe_action_setup.shutil.rmtree")
     @patch("abaqus_codex.safe_action_setup.inspect_abaqus")
@@ -157,15 +188,20 @@ class SafeActionSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = make_plugin(root / "source", marker="new")
-            target = make_plugin(root / "safe_material_action", marker="old")
+            target = make_plugin(root / "plugins" / "safe_material_action", marker="old")
             (target / "user-note.txt").write_text("用户文件", encoding="utf-8")
 
             result = setup_safe_action_plugin(
-                confirmed=True, source=source, target=target
+                confirmed=True,
+                source=source,
+                target=target,
+                backup_root=root / "recovery" / "plugin",
             )
 
             backup = Path(str(result["backup"]))
             self.assertTrue(backup.is_dir())
+            self.assertEqual(backup.parent, root / "recovery" / "plugin")
+            self.assertNotEqual(backup.parent, target.parent)
             self.assertIn(".backup-", backup.name)
             self.assertEqual(
                 (backup / "user-note.txt").read_text(encoding="utf-8"),
@@ -224,6 +260,23 @@ class SafeActionSetupTests(unittest.TestCase):
                 )
 
             self.assertFalse(target.exists())
+
+    @patch("abaqus_codex.safe_action_setup.inspect_abaqus")
+    def test_source_and_target_ancestry_overlap_is_rejected(self, inspect_mock):
+        """插件安装不得把目标放入资源内部，也不得反过来。"""
+
+        inspect_mock.return_value = abaqus_result()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = make_plugin(root / "source")
+            with self.assertRaisesRegex(SafeActionSetupError, "互为父目录"):
+                setup_safe_action_plugin(
+                    confirmed=True,
+                    source=source,
+                    target=source / "nested-target",
+                    backup_root=root / "recovery" / "plugin",
+                )
+            self.assertFalse((source / "nested-target").exists())
 
     def test_default_target_uses_userprofile(self):
         """Windows 默认路径应明确落在当前用户的 abaqus_plugins 下。"""

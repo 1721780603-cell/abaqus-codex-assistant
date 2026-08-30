@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -18,12 +18,14 @@ from abaqus_codex.abqpy_environment import (
 )
 from abaqus_codex.environment import inspect_abaqus
 from abaqus_codex.mcp_environment import (
+    _codex_candidates,
     inspect_abaqus_mcp,
     parse_abaqus_mcp_names,
     query_codex_mcp_list,
     vendor_python_paths,
 )
 from abaqus_codex.mcp_guard import MANAGED_GUARD_MARKER
+from abaqus_codex.paths import is_private_runtime, project_python_executable
 
 
 MCP_REPOSITORY = "https://github.com/Cai-aa/abaqus-mcp.git"
@@ -34,6 +36,247 @@ MCP_SERVER_NAME = "abaqus-mcp-server"
 
 class McpSetupError(RuntimeError):
     """表示 MCP 安装或注册没有安全完成。"""
+
+
+def _same_lexical_path(value: object, expected: Path) -> bool:
+    """比较命令配置中的绝对路径，不解析链接或访问目标文件。"""
+
+    if not isinstance(value, str) or not value.strip():
+        return False
+    actual_text = os.path.normcase(
+        os.path.abspath(os.path.expanduser(value.strip()))
+    )
+    expected_text = os.path.normcase(
+        os.path.abspath(os.path.expanduser(os.fspath(expected)))
+    )
+    return actual_text == expected_text
+
+
+def _managed_registration_matches(
+    payload: object, target: Path, executable: Path
+) -> bool:
+    """仅识别本安装版生成、且没有被用户改动的 stdio 注册。"""
+
+    if not isinstance(payload, dict):
+        return False
+    transport = payload.get("transport")
+    if not isinstance(transport, dict):
+        return False
+    if transport.get("type") != "stdio":
+        return False
+    if not _same_lexical_path(transport.get("command"), executable):
+        return False
+
+    arguments = transport.get("args")
+    expected_guard = target / "mcp_guard.py"
+    if (
+        not isinstance(arguments, list)
+        or len(arguments) != 1
+        or not _same_lexical_path(arguments[0], expected_guard)
+    ):
+        return False
+
+    environment = transport.get("env")
+    if not isinstance(environment, dict):
+        return False
+    if not _same_lexical_path(environment.get("ABAQUS_MCP_HOME"), target):
+        return False
+
+    # 本项目注册时只写入这两个环境变量。额外变量、工作目录或继承变量
+    # 都可能是用户后续修改，因此宁可留下失效注册，也绝不擅自删除。
+    expected_python_path = os.pathsep.join(
+        str(path) for path in vendor_python_paths(target / "vendor")
+    )
+    if set(environment) != {"ABAQUS_MCP_HOME", "PYTHONPATH"}:
+        return False
+    if environment.get("PYTHONPATH") != expected_python_path:
+        return False
+    if transport.get("cwd") not in (None, ""):
+        return False
+    if transport.get("env_vars") not in (None, []):
+        return False
+    return True
+
+
+def remove_managed_codex_registration(
+    target: Optional[Path] = None, timeout_seconds: int = 15
+) -> Dict[str, object]:
+    """安全移除当前运行时拥有的 MCP 注册；无法证明所有权时保持原样。"""
+
+    install_target = (target or (Path.home() / ".abaqus-mcp")).resolve()
+    result: Dict[str, object] = {
+        "status": "cli_unavailable",
+        "removed": False,
+        "target": str(install_target),
+        "codex_cli": None,
+        "message": "没有找到 Codex CLI；未更改 MCP 注册。",
+    }
+    candidates = _codex_candidates()
+    if not candidates:
+        return result
+
+    query_failures: List[str] = []
+    for candidate in candidates:
+        command = [
+            str(candidate),
+            "mcp",
+            "get",
+            MCP_SERVER_NAME,
+            "--json",
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            query_failures.append("{0}: {1}".format(candidate, error))
+            continue
+        if completed.returncode != 0:
+            # Codex 对“不存在”和其他读取失败均返回非零；两种情况都必须
+            # 保持不变，且不依赖可能随版本/语言变化的错误文字。
+            query_failures.append(
+                "{0}: 退出码 {1}".format(candidate, completed.returncode)
+            )
+            continue
+        try:
+            payload = json.loads(
+                completed.stdout.decode("utf-8", errors="strict")
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            query_failures.append("{0}: JSON 无效（{1}）".format(candidate, error))
+            continue
+
+        result["codex_cli"] = str(candidate)
+        if not _managed_registration_matches(
+            payload, install_target, project_python_executable()
+        ):
+            result.update(
+                {
+                    "status": "preserved_unmanaged",
+                    "message": (
+                        "MCP 注册不是当前安装版的原始受管配置；已保留。"
+                    ),
+                }
+            )
+            return result
+        try:
+            _run_command(
+                [str(candidate), "mcp", "remove", MCP_SERVER_NAME],
+                timeout_seconds=timeout_seconds,
+            )
+        except McpSetupError as error:
+            result.update(
+                {
+                    "status": "remove_failed",
+                    "message": "受管 MCP 注册未能移除；已停止清理：{0}".format(
+                        error
+                    ),
+                }
+            )
+            return result
+        result.update(
+            {
+                "status": "removed",
+                "removed": True,
+                "message": "已移除当前安装版创建的 Abaqus MCP 注册。",
+            }
+        )
+        return result
+
+    result.update(
+        {
+            "status": "not_registered_or_unreadable",
+            "message": "未读取到 Abaqus MCP 注册；未更改任何配置。",
+            "query_failures": query_failures,
+        }
+    )
+    return result
+
+
+def stop_managed_headless_bridge_for_uninstall(
+    target: Optional[Path] = None, timeout_seconds: int = 20
+) -> Dict[str, object]:
+    """仅向本项目标记的 headless bridge 发停止信号，绝不强杀进程。"""
+
+    from abaqus_codex.mcp_headless import (
+        HEADLESS_PID_NAME,
+        HEADLESS_SCRIPT_NAME,
+        MANAGED_HEADLESS_MARKER,
+        McpHeadlessError,
+        inspect_headless_bridge,
+        stop_headless_bridge,
+    )
+
+    install_target = (target or (Path.home() / ".abaqus-mcp")).resolve()
+    script = install_target / HEADLESS_SCRIPT_NAME
+    launcher_path = install_target / HEADLESS_PID_NAME
+    base: Dict[str, object] = {
+        "status": "not_running",
+        "stopped": True,
+        "target": str(install_target),
+        "message": "没有本项目管理的 headless bridge 需要停止。",
+    }
+    try:
+        state = inspect_headless_bridge(install_target)
+    except (OSError, ValueError) as error:
+        base.update(
+            {
+                "status": "inspection_failed",
+                "stopped": False,
+                "message": "无法确认 headless bridge 所有权；未发送停止信号：{0}".format(
+                    error
+                ),
+            }
+        )
+        return base
+    if not state.get("managed_process_running"):
+        return base
+
+    try:
+        script_text = script.read_text(encoding="utf-8", errors="replace")
+        launcher = json.loads(launcher_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+        launcher = None
+        script_text = ""
+    if (
+        MANAGED_HEADLESS_MARKER not in script_text
+        or not isinstance(launcher, dict)
+        or not _same_lexical_path(launcher.get("script"), script)
+    ):
+        base.update(
+            {
+                "status": "preserved_unmanaged",
+                "stopped": False,
+                "message": "后台进程缺少本项目所有权标记；未发送停止信号。",
+            }
+        )
+        return base
+
+    try:
+        after = stop_headless_bridge(
+            install_target, timeout_seconds=timeout_seconds
+        )
+    except McpHeadlessError as error:
+        base.update(
+            {
+                "status": "stop_not_confirmed",
+                "stopped": False,
+                "message": str(error),
+            }
+        )
+        return base
+    base.update(
+        {
+            "status": "stopped",
+            "stopped": not bool(after.get("managed_process_running")),
+            "message": "已请求本项目 headless bridge 自行停止；未强杀进程。",
+        }
+    )
+    return base
 
 
 def _run_command(
@@ -94,9 +337,12 @@ def _ensure_dependencies(target: Path) -> str:
         return "MCP Python 依赖已存在，未重复安装。"
 
     vendor.mkdir(parents=True, exist_ok=True)
+    python_command = [str(project_python_executable())]
+    if is_private_runtime():
+        python_command.append("-I")
     _run_command(
-        [
-            sys.executable,
+        python_command
+        + [
             "-m",
             "pip",
             "install",
@@ -172,7 +418,7 @@ def _registration_command(codex_cli: Path, target: Path, entry: Path) -> List[st
         "--env",
         "PYTHONPATH={0}".format(python_path),
         "--",
-        sys.executable,
+        str(project_python_executable()),
         str(entry),
     ]
 
