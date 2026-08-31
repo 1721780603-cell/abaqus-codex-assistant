@@ -95,6 +95,7 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   CodexHome: String;
+  UserProfileRoot: String;
   SkillTarget: String;
   PluginTarget: String;
 begin
@@ -102,10 +103,25 @@ begin
   if CurPageID <> wpSelectDir then
     Exit;
   CodexHome := GetEnv('CODEX_HOME');
+  UserProfileRoot := GetEnv('USERPROFILE');
   if CodexHome = '' then
-    CodexHome := ExpandConstant('{userprofile}\.codex');
+  begin
+    if UserProfileRoot = '' then
+    begin
+      MsgBox('Windows USERPROFILE is not available; Setup cannot locate your Codex folder.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    CodexHome := AddBackslash(UserProfileRoot) + '.codex';
+  end;
   SkillTarget := AddBackslash(CodexHome) + 'skills\abaqus-modeling-guide';
-  PluginTarget := ExpandConstant('{userprofile}\abaqus_plugins\safe_material_action');
+  if UserProfileRoot = '' then
+  begin
+    MsgBox('Windows USERPROFILE is not available; Setup cannot locate the Abaqus plug-in folder.', mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+  PluginTarget := AddBackslash(UserProfileRoot) + 'abaqus_plugins\safe_material_action';
   if PathsOverlap(WizardDirValue, SkillTarget) or
     PathsOverlap(WizardDirValue, PluginTarget) then
   begin
