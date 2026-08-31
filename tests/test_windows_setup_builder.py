@@ -104,6 +104,8 @@ class WindowsSetupBuilderTests(unittest.TestCase):
         )
         self.assertIn("function InitializeSetup", text)
         self.assertIn("A newer Abaqus Codex Assistant is already installed", text)
+        self.assertNotIn("{userprofile}", text)
+        self.assertIn("GetEnv('USERPROFILE')", text)
 
     def test_named_application_is_a_real_fixed_command_launcher(self):
         launcher = (
