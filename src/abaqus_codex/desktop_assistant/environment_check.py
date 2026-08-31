@@ -114,6 +114,7 @@ def build_environment_items(
         abqpy_next_step = (
             "先确认上面的 Abaqus {0} 正是本次要使用的版本。"
             "确认后点击下方按钮，把严格同年份安装请求复制给 Codex。"
+            "安装完成后回到本窗口点击‘重新检查’，无需重启中文助手。"
         ).format(abaqus_version, abqpy_requirement)
         abqpy_codex_prompt = (
             "我确认本次使用 Abaqus {0}。请先只读复核检测结果，"
@@ -183,6 +184,8 @@ def build_environment_items(
             "abqpy 已就绪，再检查 Abaqus MCP 的安装、注册、插件心跳"
             "和只读能力。任何下载、注册或修复前先展示计划并等待我确认；"
             "不得把‘已注册’或‘有心跳’误报为‘只读能力已连接’。"
+            "若本次新建或修改了 Codex MCP 注册，只提示我重启 Codex 一次；"
+            "之后启动 Abaqus 插件并执行 ping 与只读查询，不要反复要求重启助手。"
         )
 
     return [
