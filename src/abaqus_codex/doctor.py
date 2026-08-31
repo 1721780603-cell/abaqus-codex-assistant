@@ -8,11 +8,15 @@ from typing import Dict
 from abaqus_codex.abqpy_environment import inspect_abqpy
 from abaqus_codex.environment import inspect_abaqus
 from abaqus_codex.mcp_environment import inspect_abaqus_mcp
+from abaqus_codex.paths import activate_user_python_packages
 
 
 def inspect_environment() -> Dict[str, object]:
     """执行三项检测，并区分本地基础模式和 Codex 智能模式。"""
 
+    # 安装版 abqpy 可能在助手进程启动后才由用户完成安装；每次体检
+    # 都重新把用户包目录放入 sys.path，避免为刷新状态强制重启助手。
+    activate_user_python_packages()
     abaqus = inspect_abaqus()
     abqpy = inspect_abqpy(abaqus["version"])
     mcp = inspect_abaqus_mcp()
