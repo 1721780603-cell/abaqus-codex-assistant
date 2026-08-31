@@ -189,11 +189,12 @@ class McpGuardSetupTests(unittest.TestCase):
 class McpDoctorModeTests(unittest.TestCase):
     """确认配置完成不等于 MCP 当前可以调用。"""
 
+    @patch("abaqus_codex.doctor.activate_user_python_packages")
     @patch("abaqus_codex.doctor.inspect_abaqus_mcp")
     @patch("abaqus_codex.doctor.inspect_abqpy")
     @patch("abaqus_codex.doctor.inspect_abaqus")
     def test_offline_bridge_disables_smart_mode(
-        self, abaqus_mock, abqpy_mock, mcp_mock
+        self, abaqus_mock, abqpy_mock, mcp_mock, activate_mock
     ):
         """桥接离线时应保留配置完成状态，但智能模式不可用。"""
 
@@ -201,6 +202,7 @@ class McpDoctorModeTests(unittest.TestCase):
         abqpy_mock.return_value = {"usable": True, "version": "2021.7.3"}
         mcp_mock.return_value = {"usable": True, "responsive": False}
         result = inspect_environment()
+        activate_mock.assert_called_once_with()
         self.assertTrue(result["ai_configured"])
         self.assertFalse(result["ai_usable"])
 
