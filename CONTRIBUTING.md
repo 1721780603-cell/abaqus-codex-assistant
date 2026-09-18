@@ -14,9 +14,13 @@
 ## 本地测试
 
 ```powershell
+$ProjectPython = ".\\.venv\\Scripts\\python.exe"
+& $ProjectPython -m pip install -e ".[test]"
 $env:PYTHONPATH = (Join-Path (Get-Location) "src")
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+& $ProjectPython -m unittest discover -s tests -v
 ```
+
+GitHub Actions 则使用普通安装（不使用 `-e`）再运行同一组测试，以尽早发现发布包遗漏文件或依赖不完整的问题。
 
 真实 Abaqus 测试请使用独立示例参数，不使用机密工程数据。
 
