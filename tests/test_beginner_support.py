@@ -19,6 +19,11 @@ from abaqus_codex.desktop_assistant.beginner_guide import (
     BEGINNER_STEPS,
     format_beginner_guide,
 )
+from abaqus_codex.desktop_assistant.contact_guide import (
+    CONTACT_SCENARIOS,
+    format_contact_selection_guide,
+    recommend_contact,
+)
 
 
 class BeginnerGuideTests(unittest.TestCase):
@@ -33,6 +38,55 @@ class BeginnerGuideTests(unittest.TestCase):
         self.assertIn("创建一个长 100 mm", guide)
         self.assertIn("最大 Mises 应力并生成中文报告", guide)
         self.assertIn("无需背诵", guide)
+
+
+class ContactSelectionGuideTests(unittest.TestCase):
+    """确认接触教学能区分接触、约束和连接器。"""
+
+    def test_common_civil_scenarios_are_covered(self):
+        """接触指南必须覆盖连续体、理想粘结、滑移和界面损伤。"""
+
+        keys = {scenario.key for scenario in CONTACT_SCENARIOS}
+        self.assertEqual(len(keys), len(CONTACT_SCENARIOS))
+        self.assertTrue({
+            "single_body",
+            "perfect_bond",
+            "embedded_rebar",
+            "pair_contact",
+            "general_contact",
+            "cohesive_interface",
+            "simplified_connection",
+        }.issubset(keys))
+
+    def test_recommendations_do_not_call_everything_contact(self):
+        """新手必须知道 Tie、嵌入和连接器不是普通表面接触。"""
+
+        self.assertIn("Tie", recommend_contact("perfect_bond").recommendation)
+        self.assertIn(
+            "Embedded Region",
+            recommend_contact("embedded_rebar").recommendation,
+        )
+        self.assertIn(
+            "Connector",
+            recommend_contact("simplified_connection").recommendation,
+        )
+
+    def test_guide_teaches_decision_inputs_and_verification(self):
+        """指南不仅给结论，还应要求参数来源和结果检查。"""
+
+        guide = format_contact_selection_guide()
+        self.assertIn("一分钟决策树", guide)
+        self.assertIn("桩—土", guide)
+        self.assertIn("摩擦系数来源", guide)
+        self.assertIn("CPRESS", guide)
+        self.assertIn("我确认后再生成修改计划", guide)
+        self.assertIn("不会修改 Abaqus 模型", guide)
+
+    def test_unknown_scenario_is_rejected(self):
+        """未知场景不能被静默猜成某种接触。"""
+
+        with self.assertRaises(ValueError):
+            recommend_contact("guess-for-me")
 
 
 class AssistantHistoryStoreTests(unittest.TestCase):

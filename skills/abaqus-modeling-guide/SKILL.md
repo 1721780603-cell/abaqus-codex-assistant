@@ -75,6 +75,8 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 
 ### 4. 分阶段收集参数
 
+用户的问题涉及接触、界面、粘结、钢筋嵌入、支座或土—结构相互作用时，先读取 [references/contact-selection.md](references/contact-selection.md)。先判断是否真的需要接触，再区分 Tie、Embedded Region、接触对、General Contact、Cohesive contact 和 Connector/Coupling。当前执行器不能创建任意接触，只能教学选型和整理结构化需求；不要声称模型已经修改。
+
 自定义模型按以下顺序提问：
 
 1. 几何尺寸与一致单位制；
