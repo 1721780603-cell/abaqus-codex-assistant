@@ -584,6 +584,20 @@ class DesktopSourceSafetyTests(unittest.TestCase):
         self.assertIn("except Exception", worker_source)
         self.assertIn("self.result_queue.put(state)", worker_source)
 
+    def test_contact_teaching_has_a_dedicated_read_only_entry(self):
+        """接触教学应可直接打开，但不能冒充接触执行器。"""
+
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "abaqus_codex"
+            / "desktop_assistant"
+            / "app.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('text="接触怎么选"', source)
+        self.assertIn("command=self._show_contact_guide", source)
+        self.assertIn("content=format_contact_selection_guide()", source)
+
     def test_safety_label_keeps_widget_instead_of_grid_result(self):
         """需要后续更新的标签变量不能误存成 grid() 的 None。"""
 

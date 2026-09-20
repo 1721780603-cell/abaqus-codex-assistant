@@ -29,6 +29,9 @@ from abaqus_codex.desktop_assistant.assistant_history import (
     format_history,
 )
 from abaqus_codex.desktop_assistant.beginner_guide import format_beginner_guide
+from abaqus_codex.desktop_assistant.contact_guide import (
+    format_contact_selection_guide,
+)
 from abaqus_codex.desktop_assistant.codex_status import (
     CodexLoginError,
     CodexStatus,
@@ -168,6 +171,7 @@ class DesktopAssistantApp:
         self.latest_state: Optional[AssistantViewState] = None
         self.log_lines: list[str] = []
         self.guide_window: Optional[tk.Toplevel] = None
+        self.contact_guide_window: Optional[tk.Toplevel] = None
         self.history_window: Optional[tk.Toplevel] = None
         self.environment_window: Optional[tk.Toplevel] = None
         self.environment_check_running = False
@@ -502,6 +506,18 @@ class DesktopAssistantApp:
             sticky="w",
             padx=(self._px(8), 0),
         )
+        ttk.Button(
+            route_actions,
+            text="接触怎么选",
+            style="Secondary.TButton",
+            command=self._show_contact_guide,
+        ).grid(
+            row=1,
+            column=2,
+            sticky="w",
+            padx=(self._px(8), 0),
+            pady=(self._px(8), 0),
+        )
         self.codex_check_button = ttk.Button(
             route_actions,
             text="检查 Codex",
@@ -653,6 +669,15 @@ class DesktopAssistantApp:
             attribute="guide_window",
             title="矩形板拉伸十步指令",
             content=format_beginner_guide(self.current_step_number),
+        )
+
+    def _show_contact_guide(self) -> None:
+        """显示土木常见界面的接触选型教学，不修改模型。"""
+
+        self._show_text_window(
+            attribute="contact_guide_window",
+            title="土木工程接触选择向导",
+            content=format_contact_selection_guide(),
         )
 
     def _show_history(self) -> None:

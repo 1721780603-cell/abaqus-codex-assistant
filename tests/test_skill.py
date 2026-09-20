@@ -38,6 +38,17 @@ class ModelingGuideSkillTests(unittest.TestCase):
             with self.subTest(relative_link=relative_link):
                 self.assertTrue((SKILL_ROOT / relative_link).is_file())
 
+    def test_contact_requests_route_to_focused_reference(self):
+        """接触问题应按需读取专门参考，并保持执行能力边界。"""
+
+        instructions = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        reference = (
+            SKILL_ROOT / "references" / "contact-selection.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("references/contact-selection.md", instructions)
+        self.assertIn("Surface-to-surface contact", reference)
+        self.assertIn("当前白名单执行器尚未支持任意接触写入", reference)
+
 
 if __name__ == "__main__":
     unittest.main()
