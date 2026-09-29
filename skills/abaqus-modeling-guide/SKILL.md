@@ -1,11 +1,23 @@
 ---
 name: abaqus-modeling-guide
-description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模或科研路线、创建并校验个人 JSON 配置、确认后求解以及中文结果解读。适用于使用 Abaqus Codex Assistant 建立受支持模型；不用于任意复杂几何或直接给出生产设计结论。
+description: 带 Abaqus 初学者检查环境并完成受支持模型，讲解实际建模代码、土木接触选型、单参数对比实验和结果验证。适用于 Abaqus Codex Assistant 学习与建模；接触选型仅教学，不提供任意复杂模型自动执行或生产设计结论。
 ---
 
 # Abaqus 新手建模向导
 
 帮助用户真正理解并完成一个模型，而不是一次生成一大段无法检查的脚本。
+
+## 按学习目标读取资料
+
+纯概念、接触选型、代码阅读和实验设计问题直接进入相应教学，不要求先安装应用或完成环境体检；真正创建配置、建模或求解时再进入下方工作流程。
+
+- “这段代码做什么、教我写建模代码”：读取 [references/code-learning.md](references/code-learning.md)，以当前项目真实代码为依据。
+- “钢筋、支座、土与结构该用什么接触”：读取 [references/contact-selection.md](references/contact-selection.md)，解释物理假设及适用边界。
+- “改变一个参数会怎样、做对比实验”：读取 [references/parameter-experiments.md](references/parameter-experiments.md)，先预测，再设计受控对比。
+- “算完了能信吗、怎样验证”：读取 [references/result-verification.md](references/result-verification.md)，区分运行成功、数值验证与物理验证。
+- “想学 DISP、DFLUX、FILM、USDFLD、UVARM、UEXPAN、HETVAL 子程序”：读取 [references/subroutine-labs.md](references/subroutine-labs.md)，先导出固定实验包并阅读对照与理论值。
+
+学习/教学场景在首个模型后串联“读代码 → 预测参数影响 → 对比结果 → 核查证据”；用户只想解决某一项时，不强制走完整课程。只读取本次所需资料。
 
 ## 对话方式
 
@@ -133,7 +145,7 @@ description: 带 Abaqus 初学者逐步完成首次启动检查、选择建模�
 
 ## 能力边界
 
-- 当前只支持模型目录中的五类模型。面对任意复杂几何、接触、塑性或用户自定义装配时，明确说明尚未实现，并把需求整理成后续开发任务，不伪造结果。
+- 模型目录有原有五类模型、第六类实验性 UMAT 三维线弹性模型，以及第 7–13 类独立子程序实验包。选择第六类时读取 [references/umat-elastic.md](references/umat-elastic.md)；选择第 7–13 类时读取 [references/subroutine-labs.md](references/subroutine-labs.md)。新增实验需要 Fortran，尚未真机验证；7–13 仅导出输入文件，不走现有 JSON `run` 命令。面对任意复杂几何、接触、塑性或用户自定义装配时，明确说明尚未实现，不伪造结果。
 - 维护者目前只在 Abaqus 2021 上完成真机全流程验证。Abaqus 2022–2025 可以检测并进入候选兼容流程，但不得称为“已验证支持”。Abaqus 2026 为已知不兼容，自动安装、MCP 和求解流程禁用，只保留检测提示。
 - MCP 出现在 Codex 列表中只说明“已注册”。必须在用户选择的 Abaqus 版本中通过插件加载、心跳或 `ping` 以及至少一个只读能力探测后，才能称为“当前会话已连接”；任一步失败都不能继续开放任意脚本执行。
 - 不安装、破解或分发 Abaqus，不绕过许可证。

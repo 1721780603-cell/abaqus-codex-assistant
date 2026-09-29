@@ -202,6 +202,8 @@ def _model_specific_text(
 def build_chinese_report(results: Mapping[str, object]) -> str:
     """生成包含模型参数、边界条件和极值结果的中文报告文本。"""
 
+    if results["config"]["model"].get("type", "rectangle") == "umat_elastic":
+        return _build_umat_report(results)
     config = results["config"]
     model = config["model"]
     material = config["material"]
@@ -289,3 +291,27 @@ def write_chinese_report(path: Path, results: Mapping[str, object]) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(build_chinese_report(results), encoding="utf-8", newline="\n")
+
+
+def _build_umat_report(results: Mapping[str, object]) -> str:
+    lines = ["# UMAT 三维线弹性拉伸教学报告", "",
+             "采用 C3D8 实体、静力小变形；三个坐标零平面仅约束各自法向位移，允许泊松收缩。",
+             "两次顺序计算：UMAT 材料与内置 Elastic 对照。结果不代表混凝土开裂或损伤。", ""]
+    for label, key, unit in (
+        ("最大位移模", "maximum_displacement", "mm"),
+        ("最大 Mises 应力", "maximum_mises_stress", "MPa"),
+        ("积分点平均 S11（均匀块体）", "mean_s11", "MPa"),
+        ("理论 S11", "theoretical_s11", "MPa"),
+        ("右端合反力 RF1", "right_rf1", "N"),
+        ("左端合反力 RF1", "left_rf1", "N"),
+        ("理论右端反力", "theoretical_reaction", "N"),
+        ("S11 相对理论误差", "relative_s11_error", ""),
+        ("S11 相对内置材料差异（以理论值归一化）", "relative_reference_error", ""),
+        ("右端反力相对理论误差", "relative_reaction_error", ""),
+        ("左右反力不平衡比", "relative_balance_error", "")):
+        lines.append("- {0}：{1} {2}".format(label, _number(results[key]), unit))
+    lines.extend(["", "- UMAT ODB：`{0}`".format(results['odb_path']),
+                  "- 对照 ODB：`{0}`".format(results['reference']['odb_path']),
+                  "- 子程序：`{0}`".format(results['user_subroutine']),
+                  "", "误差为实际结果计算值，未自动设置通过阈值。此拉伸对照不能替代剪切、多轴和其他版本验证。"])
+    return "\n".join(lines)+"\n"

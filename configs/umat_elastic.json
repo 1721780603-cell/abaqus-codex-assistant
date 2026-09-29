@@ -1,0 +1,6 @@
+{
+  "model": {"type": "umat_elastic", "name": "UmatElastic3D", "length": 10, "height": 10, "thickness": 10},
+  "material": {"name": "ElasticTeaching", "youngs_modulus": 30000, "poisson_ratio": 0.2},
+  "analysis": {"step_name": "Tension", "job_name": "umat_elastic_3d", "mesh_size": 10, "right_edge_displacement": 0.001, "num_cpus": 1},
+  "units": {"length": "mm", "stress": "MPa"}
+}

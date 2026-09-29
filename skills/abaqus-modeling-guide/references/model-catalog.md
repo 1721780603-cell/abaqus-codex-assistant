@@ -11,6 +11,18 @@
 | 3 | 悬臂梁均布载荷弯曲 | `cantilever_bending` | 固定端、压力载荷、弯曲变形 | 入门进阶 |
 | 4 | 方板双向拉伸 | `biaxial_tension` | 双向位移和双向应力状态 | 进阶 |
 | 5 | 三维路面移动荷载 | `moving_load_road` | 动力分析、密度、DLOAD | 高级 |
+| 6 | UMAT 三维线弹性拉伸对照 | `umat_elastic` | 材料子程序、应力更新、理论与内置材料对照 | 实验性，待真机验证 |
+| 7 | DISP 拉伸位移渐增 | `disp_ramp` 实验包 | 位移边界子程序与反力核对 | 实验性，待真机验证 |
+| 8 | DFLUX 墙体热流 | `dflux_wall` 实验包 | 热流边界、温度梯度 | 实验性，待真机验证 |
+| 9 | FILM 墙体对流 | `film_wall` 实验包 | 对流换热与热阻 | 实验性，待真机验证 |
+| 10 | USDFLD 场变量弹性 | `usdfld_elastic` 实验包 | 场变量改变材料参数 | 实验性，待真机验证 |
+| 11 | UVARM 轴向应力比 | `uvarm_stress_ratio` 实验包 | 用实际 S11 生成自定义输出 | 实验性，待真机验证 |
+| 12 | UEXPAN 温升杆件 | `uexpan_thermal_bar` 实验包 | 热膨胀与自由伸长 | 实验性，待真机验证 |
+| 13 | HETVAL 内部热源 | `hetval_heated_wall` 实验包 | 体积热源与导热温升 | 实验性，待真机验证 |
+
+选择第六类时读取 [umat-elastic.md](umat-elastic.md)。模板为 `configs/umat_elastic.json`，需要 Fortran；使用 C3D8 三维实体、mm–MPa 单位制，一次运行顺序提交 UMAT 和内置弹性两个作业。原有五类案例的验证结论不自动适用于它。
+
+选择第 7–13 类时读取 [subroutine-labs.md](subroutine-labs.md)。它们由 `subroutine-lab` 导出独立输入文件与子程序，目前不属于 `validate`/`run` 的 JSON 模型类型，也没有真机验证记录。
 
 前四个模型使用 mm–MPa 一致单位制。此时弹性模量和压力使用 MPa，几何和位移使用 mm。移动荷载使用 mm–MPa–s–tonne。
 

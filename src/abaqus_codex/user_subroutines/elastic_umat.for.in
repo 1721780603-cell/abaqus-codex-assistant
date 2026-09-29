@@ -1,0 +1,63 @@
+      SUBROUTINE UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,
+     1 RPL,DDSDDT,DRPLDE,DRPLDT,
+     2 STRAN,DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,
+     3 NDI,NSHR,NTENS,NSTATV,PROPS,NPROPS,COORDS,DROT,PNEWDT,
+     4 CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,JSTEP,KINC)
+      INCLUDE 'ABA_PARAM.INC'
+      CHARACTER*80 CMNAME
+      DIMENSION STRESS(NTENS),STATEV(NSTATV),
+     1 DDSDDE(NTENS,NTENS),DDSDDT(NTENS),DRPLDE(NTENS),
+     2 STRAN(NTENS),DSTRAN(NTENS),TIME(2),PREDEF(1),DPRED(1),
+     3 PROPS(NPROPS),COORDS(3),DROT(3,3),DFGRD0(3,3),
+     4 DFGRD1(3,3),JSTEP(4)
+      DOUBLE PRECISION YOUNG,POISS,SHEAR,ALAM,DSIG
+C     Small-strain isotropic elasticity; 3D solids only.
+C     PROPS(1)=E, PROPS(2)=nu. Shear strains are engineering strains.
+      IF (NDI.NE.3.OR.NSHR.NE.3.OR.NTENS.NE.6) THEN
+         WRITE(7,*) 'Elastic teaching UMAT requires 3D solids'
+         CALL XIT
+         RETURN
+      END IF
+      IF (NPROPS.NE.2) THEN
+         CALL XIT
+         RETURN
+      END IF
+      YOUNG=PROPS(1)
+      POISS=PROPS(2)
+      IF (YOUNG.LE.0.D0.OR.POISS.LT.0.D0.OR.
+     1    POISS.GT.0.45D0) THEN
+         CALL XIT
+         RETURN
+      END IF
+      SHEAR=YOUNG/(2.D0*(1.D0+POISS))
+      ALAM=YOUNG*POISS/((1.D0+POISS)*(1.D0-2.D0*POISS))
+      DO I=1,NTENS
+         DDSDDT(I)=0.D0
+         DRPLDE(I)=0.D0
+         DO J=1,NTENS
+            DDSDDE(I,J)=0.D0
+         END DO
+      END DO
+      DO I=1,3
+         DO J=1,3
+            DDSDDE(I,J)=ALAM
+         END DO
+         DDSDDE(I,I)=ALAM+2.D0*SHEAR
+      END DO
+      DO I=4,6
+         DDSDDE(I,I)=SHEAR
+      END DO
+      DO I=1,NTENS
+         DSIG=0.D0
+         DO J=1,NTENS
+            DSIG=DSIG+DDSDDE(I,J)*DSTRAN(J)
+         END DO
+         SSE=SSE+(STRESS(I)+0.5D0*DSIG)*DSTRAN(I)
+         STRESS(I)=STRESS(I)+DSIG
+      END DO
+      SPD=0.D0
+      SCD=0.D0
+      RPL=0.D0
+      DRPLDT=0.D0
+      RETURN
+      END
