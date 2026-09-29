@@ -18,6 +18,11 @@ def prepare_user_subroutine(
 ) -> Optional[Path]:
     """按模型类型生成受控子程序；普通模型不需要子程序并返回空值。"""
 
+    if config["model"]["type"] == "umat_elastic":
+        template = Path(__file__).resolve().parent / "user_subroutines" / "elastic_umat.for.in"
+        output = work_dir / "elastic_umat.for"
+        output.write_text(template.read_text(encoding="ascii"), encoding="ascii")
+        return output
     if config["model"]["type"] != "moving_load_road":
         return None
 

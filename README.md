@@ -1,5 +1,21 @@
 # Abaqus Codex Assistant
 
+## 子程序教学实验（第 7–13 类）
+
+现有五类内置模型，加上实验性的 UMAT 线弹性模型，共六类。另有七个固定教学实验包，演示 `DISP`、`DFLUX`、`FILM`、`USDFLD`、`UVARM`、`UEXPAN`、`HETVAL`。它们通过命令导出可检查的 Abaqus/Standard `.inp`、Fortran 子程序、无子程序对照文件及理论核对说明：
+
+```powershell
+abaqus-codex subroutine-lab --model disp_ramp --output C:\AbaqusLabs\disp_ramp
+abaqus-codex subroutine-lab --model dflux_wall --output C:\AbaqusLabs\dflux_wall
+abaqus-codex subroutine-lab --model film_wall --output C:\AbaqusLabs\film_wall
+abaqus-codex subroutine-lab --model usdfld_elastic --output C:\AbaqusLabs\usdfld_elastic
+abaqus-codex subroutine-lab --model uvarm_stress_ratio --output C:\AbaqusLabs\uvarm_stress_ratio
+abaqus-codex subroutine-lab --model uexpan_thermal_bar --output C:\AbaqusLabs\uexpan_thermal_bar
+abaqus-codex subroutine-lab --model hetval_heated_wall --output C:\AbaqusLabs\hetval_heated_wall
+```
+
+桌面助手左侧也有“子程序实验”按钮，可选择案例和保存位置。导出不会调用 Abaqus，也不会覆盖已有目录。每个实验包的 `README.md` 给出单独的求解命令。七个案例目前完成离线检查，尚未在真实 Abaqus 与 Fortran 编译器上验证；请按作业状态、ODB 末帧和理论值逐项核对后再扩展模型。传热实验使用 `m-W-s-°C`，不能把温度和热流解释为位移或应力。这十三类是十三个入门例子，并非 Abaqus 全部用户子程序的覆盖声明。
+
 一个面向 Abaqus 初学者的开源项目：先检查本机环境，再用清晰、可追溯的步骤完成建模、求解、ODB 结果读取和中文报告生成。
 
 当前已经实现五个由浅入深的模型：矩形板拉伸、中心圆孔板拉伸、悬臂梁均布载荷弯曲、方板双向拉伸，以及使用 Fortran DLOAD 的三维路面单轮移动载荷，并在 Abaqus 2021 上完成真实验证。
@@ -9,6 +25,13 @@
 > 原始项目与规范仓库：[`1721780603-cell/abaqus-codex-assistant`](https://github.com/1721780603-cell/abaqus-codex-assistant)。Copyright © 2026 `1721780603-cell` and contributors。使用或改编时请保留 [MIT License](LICENSE)、[版权与来源声明](NOTICE.md)，学术或教学使用请按 [CITATION.cff](CITATION.cff) 引用。
 
 ## 已实现功能
+
+### 新增实验性第六类：UMAT 材料子程序
+
+`configs/umat_elastic.json` 提供三维小应变线弹性块体拉伸；一次运行顺序求解 UMAT 与内置 Elastic 两个案例，报告实际 S11、反力、理论误差及对照差异。需要匹配 Abaqus 的 Fortran 编译环境。**此新增案例尚未完成 Fortran 编译和 Abaqus 真机验证，不属于前五类已验证模型。** 当前通过 CLI/Skill 使用，尚未增加桌面专用按钮。
+
+教学说明见 [UMAT 学习指南](skills/abaqus-modeling-guide/references/umat-elastic.md)。
+
 
 - 检测 Abaqus 安装位置、版本及自带 Python；
 - 检测 `abqpy` 安装状态和版本兼容性；

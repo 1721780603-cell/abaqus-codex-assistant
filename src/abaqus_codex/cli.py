@@ -14,6 +14,7 @@ from abaqus_codex.doctor import main as doctor_main
 from abaqus_codex.local_ai import LocalAIError, SUPPORTED_PROVIDERS
 from abaqus_codex.paths import resource_root, user_data_root
 from abaqus_codex.scenario import SCENARIOS, prompt_scenario, save_profile
+from abaqus_codex.subroutine_labs import LABS, export_lab
 
 
 def _configure_utf8_output() -> None:
@@ -42,6 +43,12 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("doctor", help="检查 Abaqus、abqpy 和 Abaqus MCP。")
+
+    lab_parser = subparsers.add_parser(
+        "subroutine-lab", help="导出第 7–13 个固定教学模型及其子程序和对照输入。"
+    )
+    lab_parser.add_argument("--model", choices=LABS, required=True)
+    lab_parser.add_argument("--output", type=Path, required=True)
 
     assistant_parser = subparsers.add_parser(
         "assistant", help="启动 Abaqus 2021 中文材料计划与安全修改助手。"
@@ -298,6 +305,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "subroutine-lab":
+            destination = export_lab(args.model, args.output.resolve())
+            print("教学实验包已生成：{0}".format(destination))
+            print("请先阅读 README.md；导出过程没有启动 Abaqus。")
+            return 0
+
         if args.command == "doctor":
             return doctor_main()
 
@@ -520,7 +533,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
             )
             return 0
-    except (ConfigurationError, LocalAIError, RuntimeError) as error:
+    except (ConfigurationError, LocalAIError, RuntimeError, OSError) as error:
         print("执行失败：{0}".format(error), file=sys.stderr)
         return 1
 

@@ -79,6 +79,6 @@ $ProjectPython = (Resolve-Path ".\.venv\Scripts\python.exe").Path
 - **MCP 缺失**：基础建模仍可继续。只有用户选择 Codex 智能模式时才介绍 `mcp-setup`；说明该命令会下载代码并修改用户级 MCP 配置，获得同意后才能带 `--yes` 执行。
 - **MCP 已配置但离线**：普通建模继续使用 CLI；用户需要 MCP 时再检查 `mcp-headless status`。
 - **GitHub、Zotero 或 ScienceDirect 未就绪**：不影响基础建模。只在用户选择“科研复现全套”或指定单项修复时处理，并遵守 [onboarding.md](onboarding.md) 中的凭据和付费墙安全边界。
-- **Fortran 缺失**：前四个二维模型仍可继续；只阻止三维移动荷载模型。
+- **Fortran 缺失**：前四个二维模型仍可继续；阻止 DLOAD 三维移动荷载、UMAT 模型及第 7–13 类子程序实验包的实际求解。实验包仍可离线导出和阅读。
 
 体检完成不等于结果可信。正式工程仍需核对单位、材料、边界条件、网格收敛性和适用规范。

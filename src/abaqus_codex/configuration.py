@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Dict, Mapping
@@ -18,12 +19,14 @@ MODEL_TYPE_PLATE_WITH_HOLE = "plate_with_hole"
 MODEL_TYPE_CANTILEVER_BENDING = "cantilever_bending"
 MODEL_TYPE_BIAXIAL_TENSION = "biaxial_tension"
 MODEL_TYPE_MOVING_LOAD_ROAD = "moving_load_road"
+MODEL_TYPE_UMAT_ELASTIC = "umat_elastic"
 SUPPORTED_MODEL_TYPES = (
     MODEL_TYPE_RECTANGLE,
     MODEL_TYPE_PLATE_WITH_HOLE,
     MODEL_TYPE_CANTILEVER_BENDING,
     MODEL_TYPE_BIAXIAL_TENSION,
     MODEL_TYPE_MOVING_LOAD_ROAD,
+    MODEL_TYPE_UMAT_ELASTIC,
 )
 
 
@@ -55,7 +58,10 @@ def _number(data: Mapping[str, object], key: str, label: str) -> float:
     value = data.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ConfigurationError("{0}必须是数值。".format(label))
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ConfigurationError("{0}必须是有限数值。".format(label))
+    return number
 
 
 def _positive_number(data: Mapping[str, object], key: str, label: str) -> float:
@@ -115,6 +121,13 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
             raise ConfigurationError("网格尺寸不能大于板的最短边。")
         normalized_model["height"] = height
         normalized_model["thickness"] = thickness
+        if model_type == MODEL_TYPE_UMAT_ELASTIC:
+            if mesh_size > min(length, height, thickness):
+                raise ConfigurationError("UMAT 实体网格不能大于最短边。")
+            if not 0.0 <= poisson_ratio <= 0.45:
+                raise ConfigurationError("本 UMAT 教学模型限定泊松比为 0 至 0.45。")
+            if units.get("length") != "mm" or units.get("stress") != "MPa":
+                raise ConfigurationError("本 UMAT 教学模型仅使用 mm–MPa 单位制。")
 
     # 圆孔位于板中心，因此孔直径必须严格小于板的长和高。
     hole_radius = None
@@ -149,10 +162,14 @@ def validate_config(data: Mapping[str, object]) -> Dict[str, object]:
         MODEL_TYPE_RECTANGLE,
         MODEL_TYPE_PLATE_WITH_HOLE,
         MODEL_TYPE_BIAXIAL_TENSION,
+        MODEL_TYPE_UMAT_ELASTIC,
     ):
         normalized_analysis["right_edge_displacement"] = _positive_number(
             analysis, "right_edge_displacement", "右边界拉伸位移"
         )
+    if model_type == MODEL_TYPE_UMAT_ELASTIC:
+        if normalized_analysis["right_edge_displacement"] / length > 0.001:
+            raise ConfigurationError("UMAT 小应变教学限定轴向应变不超过 0.001。")
     if model_type == MODEL_TYPE_CANTILEVER_BENDING:
         normalized_analysis["top_edge_pressure"] = _positive_number(
             analysis, "top_edge_pressure", "上边界均布压力"

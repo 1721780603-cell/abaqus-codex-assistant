@@ -12,7 +12,7 @@ from typing import Optional
 
 import tkinter as tk
 from tkinter import font as tkfont
-from tkinter import messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from abaqus_codex.desktop_assistant.bridge import (
     FileIpcReadOnlyBridge,
@@ -80,6 +80,7 @@ from abaqus_codex.desktop_assistant.guided_rectangle_flow import (
     build_guided_plan,
     format_guided_plan,
 )
+from abaqus_codex.subroutine_labs import LABS, export_lab
 from abaqus_codex.desktop_assistant.safe_action_bridge import (
     SafeActionBridgeError,
     SafeActionFileBridge,
@@ -172,6 +173,7 @@ class DesktopAssistantApp:
         self.log_lines: list[str] = []
         self.guide_window: Optional[tk.Toplevel] = None
         self.contact_guide_window: Optional[tk.Toplevel] = None
+        self.subroutine_labs_window: Optional[tk.Toplevel] = None
         self.history_window: Optional[tk.Toplevel] = None
         self.environment_window: Optional[tk.Toplevel] = None
         self.environment_check_running = False
@@ -518,6 +520,13 @@ class DesktopAssistantApp:
             padx=(self._px(8), 0),
             pady=(self._px(8), 0),
         )
+        ttk.Button(
+            route_actions,
+            text="子程序实验",
+            style="Secondary.TButton",
+            command=self._show_subroutine_labs,
+        ).grid(row=2, column=2, sticky="w", padx=(self._px(8), 0),
+               pady=(self._px(8), 0))
         self.codex_check_button = ttk.Button(
             route_actions,
             text="检查 Codex",
@@ -679,6 +688,45 @@ class DesktopAssistantApp:
             title="土木工程接触选择向导",
             content=format_contact_selection_guide(),
         )
+
+    def _show_subroutine_labs(self) -> None:
+        """让初学者选择固定实验，并导出输入卡片和 Fortran 文件。"""
+
+        existing = self.subroutine_labs_window
+        if existing is not None and existing.winfo_exists():
+            existing.deiconify()
+            existing.lift()
+            return
+        window = tk.Toplevel(self.root)
+        self.subroutine_labs_window = window
+        window.title("子程序教学实验 7–13")
+        window.geometry("{0}x{1}".format(self._px(530), self._px(270)))
+        window.minsize(self._px(480), self._px(240))
+        window.grid_columnconfigure(0, weight=1)
+        ttk.Label(window, text="选择要学习的子程序", style="PanelTitle.TLabel").grid(
+            row=0, column=0, sticky="w", padx=self._px(18), pady=(self._px(18), self._px(8)))
+        selected = tk.StringVar(value=LABS[0])
+        ttk.Combobox(window, textvariable=selected, values=LABS, state="readonly").grid(
+            row=1, column=0, sticky="ew", padx=self._px(18))
+        ttk.Label(window, text="导出会创建一个新文件夹，包含子程序、对照输入和说明。\n"
+                               "实验尚未在真实 Abaqus 上验证；导出不会开始求解。",
+                  style="Hint.TLabel").grid(row=2, column=0, sticky="w",
+                                          padx=self._px(18), pady=self._px(12))
+
+        def do_export() -> None:
+            parent = filedialog.askdirectory(parent=window, title="选择实验包保存位置")
+            if not parent:
+                return
+            try:
+                destination = export_lab(selected.get(), Path(parent) / selected.get())
+            except (OSError, ValueError) as error:
+                messagebox.showerror("导出失败", str(error), parent=window)
+                return
+            messagebox.showinfo("导出完成", "已创建：{0}\n请先阅读 README.md。".format(destination),
+                                parent=window)
+
+        ttk.Button(window, text="导出实验包", style="Accent.TButton",
+                   command=do_export).grid(row=3, column=0, sticky="w", padx=self._px(18))
 
     def _show_history(self) -> None:
         """显示持久化操作记录；读取失败按空历史处理。"""

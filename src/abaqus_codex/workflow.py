@@ -36,6 +36,7 @@ MODEL_SCRIPT_NAMES = {
     "cantilever_bending": "cantilever_bending.py",
     "biaxial_tension": "biaxial_tension.py",
     "moving_load_road": "moving_load_road.py",
+    "umat_elastic": "umat_elastic.py",
 }
 
 
