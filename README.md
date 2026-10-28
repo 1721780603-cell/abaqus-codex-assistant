@@ -1,5 +1,7 @@
 # Abaqus Codex Assistant
 
+> **源码与安装包不是同一进度。** 本轮维护核对时（2026-10-28），最新公开安装包仍为 `v0.2.2-alpha`；下述第 6–13 类案例属于后续 `main` 源码更新，不能认为旧 EXE 已包含它们。仅更新 Skill 也不会升级已安装的应用。普通用户请以所下载 Release 的功能说明为准。
+
 ## 子程序教学实验（第 7–13 类）
 
 现有五类内置模型，加上实验性的 UMAT 线弹性模型，共六类。另有七个固定教学实验包，演示 `DISP`、`DFLUX`、`FILM`、`USDFLD`、`UVARM`、`UEXPAN`、`HETVAL`。它们通过命令导出可检查的 Abaqus/Standard `.inp`、Fortran 子程序、无子程序对照文件及理论核对说明：
@@ -14,7 +16,7 @@ abaqus-codex subroutine-lab --model uexpan_thermal_bar --output C:\AbaqusLabs\ue
 abaqus-codex subroutine-lab --model hetval_heated_wall --output C:\AbaqusLabs\hetval_heated_wall
 ```
 
-桌面助手左侧也有“子程序实验”按钮，可选择案例和保存位置。导出不会调用 Abaqus，也不会覆盖已有目录。每个实验包的 `README.md` 给出单独的求解命令。七个案例目前完成离线检查，尚未在真实 Abaqus 与 Fortran 编译器上验证；请按作业状态、ODB 末帧和理论值逐项核对后再扩展模型。传热实验使用 `m-W-s-°C`，不能把温度和热流解释为位移或应力。这十三类是十三个入门例子，并非 Abaqus 全部用户子程序的覆盖声明。
+最新源码的桌面助手左侧也有“子程序实验”按钮，可选择案例和保存位置。导出不会调用 Abaqus，也不会覆盖已有目录。每个实验包的中文 `README.md` 给出核对步骤，`verification.md` 用于人工填写本机验证记录；导出时不会生成成功结论。七个案例目前完成离线检查，尚未在真实 Abaqus 与 Fortran 编译器上验证；请按作业状态、ODB 末帧和理论值逐项核对后再扩展模型。传热实验使用 `m-W-s-°C`，不能把温度和热流解释为位移或应力。全部十三类案例涉及九种子程序，并非 Abaqus 全部用户子程序的覆盖声明，也不表示十三类均已真机验证。验证范围和记录方法见[子程序验证指南](docs/subroutine-validation.md)。
 
 一个面向 Abaqus 初学者的开源项目：先检查本机环境，再用清晰、可追溯的步骤完成建模、求解、ODB 结果读取和中文报告生成。
 

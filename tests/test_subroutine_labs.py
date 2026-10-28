@@ -3,11 +3,68 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from abaqus_codex.subroutine_labs import LABS, export_lab
+from abaqus_codex.subroutine_labs import INPUTS, LABS, LAB_TITLES, export_lab
 from abaqus_codex.cli import main
 
 
 class SubroutineLabTests(unittest.TestCase):
+    def test_all_labs_have_chinese_instructions_and_matching_commands(self):
+        """七个案例均提供中文说明，且命令只引用该案例的实际文件。"""
+        self.assertEqual(set(LABS), set(LAB_TITLES))
+        with tempfile.TemporaryDirectory() as tmp:
+            for lab in LABS:
+                with self.subTest(lab=lab):
+                    folder = export_lab(lab, Path(tmp) / lab)
+                    readme = (folder / "README.md").read_text("utf-8")
+                    self.assertIn(LAB_TITLES[lab], readme)
+                    self.assertIn("尚未完成真实 Abaqus/Fortran 验证", readme)
+                    self.assertIn("<已核对的 Abaqus 启动命令绝对路径>", readme)
+                    self.assertIn("user=" + INPUTS[lab][2], readme)
+                    self.assertIn("input=reference.inp interactive", readme)
+                    self.assertIn(INPUTS[lab][3], readme)
+                    self.assertIn(INPUTS[lab][4], readme)
+                    self.assertIn("verification.md", readme)
+                    self.assertIn("不会自动读取本实验的 ODB", readme)
+                    self.assertIn("理论接近零时应报告绝对误差", readme)
+
+    def test_verification_record_starts_with_no_claimed_results(self):
+        """记录保留失败和缺失项；导出不能冒充求解成功或自动验收。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            for lab in LABS:
+                with self.subTest(lab=lab):
+                    folder = export_lab(lab, Path(tmp) / lab)
+                    record = (folder / "verification.md").read_text("utf-8")
+                    self.assertIn("案例标识：`" + lab + "`", record)
+                    self.assertIn("未运行 / 未核对", record)
+                    self.assertIn("Abaqus 年份及补丁", record)
+                    self.assertIn("项目 Python 版本：待填写", record)
+                    self.assertIn("Fortran 和 Visual Studio 版本", record)
+                    self.assertIn("user 实测", record)
+                    self.assertIn("reference 实测", record)
+                    self.assertIn("误差及容限依据", record)
+                    self.assertIn("物理验证（实验或独立证据）：未完成", record)
+                    self.assertNotIn("已通过", record)
+                    self.assertNotIn("计算成功", record)
+                    # 文件清单保持可审查，不额外生成自动启动求解的脚本。
+                    self.assertEqual(
+                        {path.name for path in folder.iterdir()},
+                        {"user.inp", "reference.inp", INPUTS[lab][2],
+                         "README.md", "verification.md"},
+                    )
+
+    def test_reexport_preserves_a_filled_verification_record(self):
+        """已有记录属于用户，再次导出报错后也不能覆盖记录。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = export_lab("disp_ramp", Path(tmp) / "lab")
+            record = folder / "verification.md"
+            record.write_text("用户填写的实际验证证据", encoding="utf-8")
+            before = {path.name: path.read_bytes() for path in folder.iterdir()}
+            with self.assertRaises(FileExistsError):
+                export_lab("disp_ramp", folder)
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in folder.iterdir()}, before
+            )
+
     def test_cli_export_creates_lab(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "from_cli"
